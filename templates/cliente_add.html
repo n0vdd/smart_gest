@@ -18,21 +18,23 @@
         <fieldset>
             <legend>Address</legend>
             <label for="cep">CEP:</label><br>
-            <input type="text" id="cep" name="endereco[cep]"><br>
-            <label for="rua">Rua:</label><br>
-            <input type="text" id="rua" name="endereco[rua]"><br>
-            <label for="numero">Número:</label><br>
-            <input type="text" id="numero" name="endereco[numero]"><br>
-            <label for="bairro">Bairro:</label><br>
-            <input type="text" id="bairro" name="endereco[bairro]"><br>
-            <label for="complemento">Complemento:</label><br>
-            <input type="text" id="complemento" name="endereco[complemento]"><br>
-            <label for="cidade">Cidade:</label><br>
-            <input type="text" id="cidade" name="endereco[cidade]"><br>
-            <label for="estado">Estado:</label><br>
-            <input type="text" id="estado" name="endereco[estado]"><br>
-            <label for="ibge">IBGE:</label><br>
-            <input type="text" id="ibge" name="endereco[ibge]"><br>
+            <input type="text" id="cep" name="endereco.cep" hx-get="/lookup_cep?cep=" hx-trigger="change" hx-target="#address-fields" hx-swap="innerHTML"><br>
+            <div id="address-fields">
+                <label for="rua">Rua:</label><br>
+                <input type="text" id="rua" name="endereco.rua"><br>
+                <label for="numero">Número:</label><br>
+                <input type="text" id="numero" name="endereco.numero"><br>
+                <label for="bairro">Bairro:</label><br>
+                <input type="text" id="bairro" name="endereco.bairro"><br>
+                <label for="complemento">Complemento:</label><br>
+                <input type="text" id="complemento" name="endereco.complemento"><br>
+                <label for="cidade">Cidade:</label><br>
+                <input type="text" id="cidade" name="endereco.cidade"><br>
+                <label for="estado">Estado:</label><br>
+                <input type="text" id="estado" name="endereco.estado"><br>
+                <label for="ibge">IBGE:</label><br>
+                <input type="text" id="ibge" name="endereco.ibge"><br>
+            </div>
         </fieldset>
         <label for="password">Password:</label><br>
         <input type="password" id="password" name="password"><br>
