@@ -1,0 +1,57 @@
+sql {
+  driver = "rlm_sql_postgresql"
+  dialect = "postgresql"
+
+  server = "db"
+  port = 5432
+  login = "radius"
+  password = "radiuspassword"
+
+  radius_db = "radius"
+
+  # Connection info:
+  #   "host", "hostaddr", "port", "dbname", "user", "password",
+  #   "connect_timeout", "options", "application_name", "fallback_application_name",
+  #   "keepalives", "keepalives_idle", "keepalives_interval",
+  #   "keepalives_count", "sslmode", "requiressl", "sslcompression", "sslcrl",
+  #   "requirepeer", "krbsrvname", "gsslib", "service"
+  #
+  # Server to connect to
+  server = "db"
+  port = 5432
+  login = "radius"
+  password = "radiuspassword"
+  radius_db = "radius"
+  # If PostgreSQL has been compiled with --with-openssl,
+  # SSL connections will be available.  This connection
+  # parameter uses one of the following values:
+  # "disable", "allow", "prefer", "require"
+  sslmode = prefer
+
+  # Set to "yes" to read the above variables from a
+  # separate config file.
+  # If this is set, all other variables are ignored.
+  # file = ${confdir}/sql.conf
+
+  # If yes, (or auto and we have > 1 client section), we will
+  # auto-generate /etc/raddb/certs/random with the output of
+  # /dev/urandom. This file is used to seed the rand function
+  # used in EAP-TLS, EAP-PEAP and EAP-TTLS.
+  random_file = ${confdir}/sql_random
+
+  read_clients = yes
+  client_table = "nas"
+
+  group_attribute = "SQL-Group"
+  $INCLUDE sql/${dialect}/queries.conf
+
+  accounting {
+    reference = "%{tolower:type.%{%{Acct-Status-Type}:-none}.query}"
+  }
+
+  post-auth {
+    reference = ".query"
+  }
+
+  group_membership_query = "SELECT groupname FROM ${authcheck_table} WHERE username = '%{SQL-User-Name}'"
+}

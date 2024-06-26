@@ -1,0 +1,23 @@
+[package]
+name = "smart_gest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+askama = "0.12"
+axum = "0.7"
+axum-extra =  { version = "0.9",features = ["form"] }
+chrono = "0.4"
+cnpj = "0.2"
+cpf = "0.3"
+env_logger = "0.11"
+log = "0.4"
+openssh = "0.10"
+tokio-postgres = "0.7"
+reqwest = { version = "0.12.5", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+deadpool-postgres = "0.14.0"
+thiserror = "1.0.61"
+dotenv = "0.15.0"

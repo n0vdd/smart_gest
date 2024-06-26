@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  freeradius:
+    image: freeradius/freeradius-server:latest
+    container_name: freeradius
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    volumes:
+      - ./freeradius-config:/etc/raddb
+    environment:
+      - FREERADIUS_USER=freeradius
+      - FREERADIUS_GROUP=freeradius
+    depends_on:
+      - freeradius-db
+    restart: unless-stopped
+
+  freeradius-db:
+    image: postgres:latest
+    container_name: freeradius-db
+    environment:
+      POSTGRES_USER: radius
+      POSTGRES_PASSWORD: radiuspassword
+      POSTGRES_DB: radius
+    volumes:
+      - freeradius-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  app-db:
+    image: postgres:latest
+    container_name: app-db
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppassword
+      POSTGRES_DB: appdb
+    volumes:
+      - app-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+ # rust-app:
+ #   build:
+ #     context: .
+ #     dockerfile: Dockerfile
+ #   container_name: rust-app
+ #   ports:
+ #     - "8080:8080"
+ #   volumes:
+ #     - .:/home/developer/app
+ #   depends_on:
+ #     - app-db
+ #     - freeradius
+ #   environment:
+ #     - DATABASE_URL=postgres://appuser:apppassword@app-db/appdb
+ #     - FREERADIUS_DATABASE_URL=postgres://radius:radiuspassword@freeradius-db/radius
+ #   restart: unless-stopped
+
+volumes:
+  freeradius-config:
+  freeradius-db-data:
+  app-db-data:
