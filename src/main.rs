@@ -3,7 +3,7 @@ mod model;
 mod handlers;
 
 use axum::{Router, routing::get, routing::post, extract::Extension};
-use handlers::cep::{lookup_cep, CepService};
+use handlers::cep::{lookup_cep};
 use handlers::clients::{register_client, show_cliente_form};
 use handlers::mikrotik::{register_mikrotik, show_mikrotik_form};
 use log::debug;
@@ -19,7 +19,6 @@ async fn main() {
     env_logger::init();
 
     let pool = Arc::new(create_pool().await.expect("erro ao criar pool"));
-    let cep_service = Arc::new(CepService::new());
     debug!("pool:{:?} criado",pool);
 
     let app = Router::new()
@@ -28,8 +27,7 @@ async fn main() {
         .route("/lookup_cep", get(lookup_cep))
         .route("/mikrotik", get(show_mikrotik_form))
         .route("/mikrotik", post(register_mikrotik))
-        .layer(Extension(pool))
-        .layer(Extension(cep_service));
+        .layer(Extension(pool));
 
     debug!("app:{:?} criado",app);
 

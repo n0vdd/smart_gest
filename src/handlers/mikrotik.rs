@@ -54,3 +54,8 @@ pub async fn register_mikrotik(
 
     Html(format!("<p>Mikrotik {} registered successfully!</p>", mikrotik.name))
 }
+
+//TODO funcao que retorna todos os mikrotiks
+//serao duas na verdade, uma para listagem com todos os dados
+//e outra para o dropdown com a id e nome(ver como isso sera feito em conjuncacao com o frontend)
+//askama sera util aqui

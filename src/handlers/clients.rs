@@ -1,6 +1,8 @@
 use axum::{response::Html, Extension};
 use askama::Template;
 use axum_extra::extract::Form;
+use cnpj::Cnpj;
+use cpf::Cpf;
 use std::sync::Arc;
 use sqlx::PgPool;
 use crate::model::ClientData;
@@ -23,7 +25,8 @@ pub async fn register_client(
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id"
     )
     .bind(&client.endereco.cep.cep)
-    .bind(&client.endereco.endereco)
+    .bind(&client.endereco.rua)
+    .bind(&client.endereco.numero)
     .bind(&client.endereco.bairro)
     .bind(&client.endereco.complemento)
     .bind(&client.endereco.cidade)
@@ -38,6 +41,24 @@ pub async fn register_client(
     //     password: hashed_password,
     //     ..client
     // };
+
+    let mut valid_cpf = String::new();
+    let mut valid_cnpj = String::new();
+    //TODO: validate cpf_cnpj
+    match client.pf_or_pj {
+        true => {
+            valid_cpf = client.cpf_cnpj.parse::<Cpf>().expect("error parsing cpf").to_string();
+        },
+        false => {
+            valid_cnpj = client.cpf_cnpj.parse::<Cnpj>().expect("error parsing cnpj").to_string();
+        }
+    }
+
+    //TODO will need to redo the saving logic here aswell?
+    //it would be better to save cpf/cnpj on the frontend(can use htmx)
+    //and just expose a validator endpoint
+    //i should also save the cpf/cnpj formatted and unfomatted on the db
+    //for nfs generation i need unformated but for contract generation i will need it formated
 
     sqlx::query(
         "INSERT INTO clients (pf_or_pj, name, email, cpf_cnpj, rg, cellphone, phone, login, password, address_id, mikrotik_id, plan_id)
