@@ -76,6 +76,7 @@ pub async fn lookup_cep(
     Query(query): Query<CepQuery>,
     Extension(cep_service): Extension<Arc<CepService>>,
 ) -> Json<Result<Endereco, String>> {
+    debug!("Looking up CEP: {}", query.cep);
     match cep_service.consultar(&query.cep).await {
         Ok(endereco) => Json(Ok(endereco)),
         Err(err) => Json(Err(format!("Failed to fetch address: {}", err))),

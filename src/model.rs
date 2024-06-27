@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
@@ -32,6 +34,7 @@ pub struct Cep {
     pub cep: String,
 }
 
+#[derive(Deserialize, Serialize, Debug, FromRow)]
 pub struct Plano {
     pub id: i32,
     pub name: String,
@@ -42,12 +45,16 @@ pub struct Plano {
 }
 
 
+#[derive(Deserialize, Serialize, Debug, FromRow)]
 pub struct Mikrotik {
     pub id: i32,
     pub name: String,
-    pub ip: String,
+    pub ip: IpAddr,
+    pub secret: String,
+    pub max_clientes: Option<i32>, 
     pub user: Option<String>,
     //could store this hashed?
+    //i think no, its safer
     //it will be used for ssh and doing the fallback logic from radius
     pub password: Option<String>,
 }

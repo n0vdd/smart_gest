@@ -9,7 +9,7 @@ use crate::model::ClientData;
 #[template(path = "cliente_add.html")]
 struct ClienteFormTemplate;
 
-pub async fn show_form() -> Html<String> {
+pub async fn show_cliente_form() -> Html<String> {
     let template = ClienteFormTemplate;
     Html(template.render().unwrap())
 }
@@ -41,7 +41,7 @@ pub async fn register_client(
 
     sqlx::query(
         "INSERT INTO clients (pf_or_pj, name, email, cpf_cnpj, rg, cellphone, phone, login, password, address_id, mikrotik_id, plan_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"
     )
     .bind(client.pf_or_pj)
     .bind(&client.name)
