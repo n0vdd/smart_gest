@@ -1,11 +1,12 @@
 mod db;
-mod model;
 mod handlers;
 
+use axum::routing::put;
 use axum::{Router, routing::get, routing::post, extract::Extension};
-use handlers::cep::{lookup_cep};
 use handlers::clients::{register_client, show_cliente_form};
-use handlers::mikrotik::{register_mikrotik, show_mikrotik_form};
+use handlers::mikrotik::{register_mikrotik,  show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
+use handlers::planos::{register_plano, show_planos_form};
+use handlers::utils::{lookup_cep, validate_cpf_cnpj};
 use log::debug;
 use tokio::net::TcpListener;
 use std::net::SocketAddr;
@@ -24,9 +25,15 @@ async fn main() {
     let app = Router::new()
         .route("/cliente", get(show_cliente_form))
         .route("/cliente", post(register_client))
-        .route("/lookup_cep", get(lookup_cep))
-        .route("/mikrotik", get(show_mikrotik_form))
-        .route("/mikrotik", post(register_mikrotik))
+        .route("/cep", get(lookup_cep))
+        .route("/cpf_cnpj", get(validate_cpf_cnpj))
+        .route("/mikrotik", get(show_mikrotik_list))
+        .route("/mikrotik/add", get(show_mikrotik_form))
+        .route("/mikrotik/add", post(register_mikrotik))
+        .route("/mikrotik/:id", put(update_mikrotik))
+        .route("/mikrotik/:id", get(show_mikrotik_edit_form))
+        .route("/plano", get(show_planos_form))
+        .route("/plano",post(register_plano))
         .layer(Extension(pool));
 
     debug!("app:{:?} criado",app);

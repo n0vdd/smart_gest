@@ -40,6 +40,26 @@ services:
       - app-db-data:/var/lib/postgresql/data
     restart: unless-stopped
 
+# i want a mikrotik routeros image here
+# mikrotik:   
+  routeros:
+    image: evilfreelancer/docker-routeros:latest
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+      - /dev/kvm
+    ports:
+      - "2222:22"
+      - "23:23"
+      - "80:80"
+      - "5900:5900"
+      - "8728:8728"
+      - "8729:8729"
+
+
+
  # rust-app:
  #   build:
  #     context: .

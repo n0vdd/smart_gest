@@ -1,20 +1,19 @@
 -- Add migration script here
-CREATE TABLE clients (
+CREATE TABLE clientes (
     id SERIAL PRIMARY KEY,
-    pf_or_pj BOOLEAN NOT NULL,
-    name VARCHAR(255) NOT NULL,
+    tipo BOOLEAN NOT NULL,
+    nome VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
     cpf_cnpj VARCHAR(255) NOT NULL,
-    rg VARCHAR(20),
-    cellphone VARCHAR(255) NOT NULL,
-    phone VARCHAR(255),
+    formatted_cpf_cnpj VARCHAR(255) NOT NULL,
+    telefone VARCHAR(255) NOT NULL,
     login VARCHAR(255) NOT NULL,
-    password VARCHAR(255) NOT NULL,
+    senha VARCHAR(255) NOT NULL,
     mikrotik_id INTEGER,
-    plan_id INTEGER,
-    address_id INTEGER,
-    FOREIGN KEY (address_id) REFERENCES enderecos(id),
-    FOREIGN KEY (plan_id) REFERENCES plans(id),
+    plano_id INTEGER,
+    endereco_id INTEGER,
+    FOREIGN KEY (endereco_id) REFERENCES enderecos(id),
+    FOREIGN KEY (plano_id) REFERENCES planos(id),
     FOREIGN KEY (mikrotik_id) REFERENCES mikrotik(id)
 );
 

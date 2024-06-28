@@ -1,11 +1,16 @@
 -- Add migration script here
-CREATE TABLE plans (
+CREATE TABLE planos (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    value DECIMAL(10, 2) NOT NULL,
-    discount DECIMAL(10, 2),
-    technology VARCHAR(50)
+    nome VARCHAR(255) NOT NULL,
+    descricao TEXT,
+    valor REAL NOT NULL,
+    velocidade_up INTEGER NOT NULL,
+    velocidade_down INTEGER NOT NULL,
+    -- possot ter um plano para boleto e outro cartao
+    -- caso cartao de credito -10,00
+    -- desconto DECIMAL(10, 2),
+    --fibra,telefone,email...
+    tecnologia VARCHAR(50)
     --will look into it
     --fiscal_data JSON
 );
