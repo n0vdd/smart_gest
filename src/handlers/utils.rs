@@ -1,8 +1,9 @@
 use std::env;
+use askama::Template;
 use axum::{extract::Query, response::Html};
 use cnpj::Cnpj;
 use cpf::Cpf;
-use log::debug;
+use log::{debug, error};
 use reqwest::Client;
 use serde::Deserialize;
 use thiserror::Error;
@@ -14,18 +15,36 @@ pub async fn lookup_cep(
     Query(query): Query<CepQuery>,
 ) -> Result<Html<String>, Html<String>> {
     debug!("Looking up CEP: {}", query.cep);
-    let url_template = env::var("CEP_API_URL").unwrap();
+
+    let url_template = env::var("CEP_API_URL")
+        .map_err(|e | -> _ {
+            error!("Erro:{:?} ao pegar variavel do ambiente: CEP_API_URL", e);
+            Html("Erro ao pegar variavel do ambiente: CEP_API_URL".to_string())
+        })?;
+
     let url = url_template.replace("%s", &query.cep);
 
     debug!("Requesting: {}", url);
     let client = Client::new();
-    let response = client.get(&url).send().await.map_err(|e| Html(format!("Error: {:?}", e)))?;
+    let response = client.get(&url).send().await
+    .map_err(|e | -> _ {
+        error!("Failed to send request: {:?}", e);
+        Html("Failed to send request".to_string())
+    })?;
 
     debug!("Response: {:?}", response);
 
     if response.status().is_success() {
-        let response_body = response.text().await.map_err(|e| Html(format!("Error: {:?}", e)))?;
-        let webmania_response: WebmaniaResponse = serde_json::from_str(&response_body).map_err(|e| Html(format!("Error: {:?}", e)))?;
+        let response_body = response.text().await
+        .map_err(|e | -> _ {
+            error!("Failed to get response body: {:?}", e);
+            Html("Failed to get response body".to_string())
+        })?;
+        let webmania_response: WebmaniaResponse = serde_json::from_str(&response_body)
+        .map_err(|e| -> _{
+            error!("Failed to deserialize response: {:?}", e);
+            Html("Failed to deserialize response".to_string())
+        })?;
         let endereco = EnderecoDto {
             rua: webmania_response.endereco,
             numero: None,
@@ -47,7 +66,11 @@ pub async fn lookup_cep(
             ibge: endereco.ibge,
         };
 
-        Ok(Html(template.render().expect("Failed to render endereco snippet")))
+        let template = template.render().map_err(|e| -> _ {
+            error!("Failed to render endereco snippet: {:?}", e);
+            Html("Failed to render endereco snippet".to_string())
+        })?;
+        Ok(Html(template))
     } else {
         let err = format!("HTTP error: {:?}", CepError::CepNotFound);
         Err(Html(err))
@@ -62,7 +85,13 @@ pub async fn validate_cpf_cnpj(
 ) -> Html<String> {
     match cpf_cnpj.tipo {
         TipoPessoa::PessoaFisica => {
-            let formatted = cpf_cnpj.cpf_cnpj.parse::<Cpf>().expect("Failed to parse CPF").to_string();
+            let formatted = cpf_cnpj.cpf_cnpj.parse::<Cpf>().map_err(|e| -> _
+            {
+                error!("Failed to parse CPF: {:?}", e);
+                Html("Failed to parse CPF".to_string())
+            })
+            .expect("Failed to parse CPF").to_string();
+
             return Html(format!(
                 r#"
                 <div class="mb-4">
@@ -71,9 +100,18 @@ pub async fn validate_cpf_cnpj(
                 </div>
                 "#,
                 formatted
-            ));        }
+            ));
+        }
         TipoPessoa::PessoaJuridica => {
-            let formatted = cpf_cnpj.cpf_cnpj.parse::<Cnpj>().expect("Failed to parse CNPJ").to_string();
+            let formatted = cpf_cnpj.cpf_cnpj.parse::<Cnpj>().map_err(|e| -> _
+            {
+                error!("Failed to parse CNPJ: {:?}", e);
+                Html("Failed to parse CNPJ".to_string())
+            })
+            .expect("Failed to parse CNPJ").to_string();
+
+            //TODO this will be called by htmx after the user inputs the cpf/cnpj
+            //use askama and create the snippet
             return Html(format!(
                 r#"
                 <div class="mb-4">
@@ -86,7 +124,6 @@ pub async fn validate_cpf_cnpj(
         }
     }
 }
-use askama::Template;
 
 #[derive(Template)]
 #[template(path = "endereco_snippet.html")]
@@ -97,7 +134,6 @@ struct EnderecoSnippetTemplate{
     estado: String,
     ibge: String,
 }
-
 
 #[derive(Deserialize)]
 pub struct CpfCnpjQuery {

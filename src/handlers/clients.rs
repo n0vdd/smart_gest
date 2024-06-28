@@ -3,7 +3,7 @@ use askama::Template;
 use axum_extra::extract::Form;
 use cnpj::Cnpj;
 use cpf::Cpf;
-use log::debug;
+use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use sqlx::{prelude::{FromRow, Type}, query, query_as, Decode, Encode, PgPool, Postgres};
@@ -17,24 +17,30 @@ pub async fn show_cliente_form(
     let mikrotik_list = query_as!(Mikrotik,"SELECT * FROM mikrotik")
         .fetch_all(&*pool)
         .await
-        .map_err(|e| 
-            debug!("Failed to fetch Mikrotik: {:?}", e)
-        ).expect("error fetching mikrotik");
+        .map_err(|e| -> _ { 
+            debug!("Failed to fetch Mikrotik: {:?}", e);
+            Html("<p>Failed to fetch Mikrotik</p>".to_string())
+        }).expect("error fetching mikrotik");
 
     let plan_list  = query_as!(Plano,"SELECT * FROM planos")
         .fetch_all(&*pool)
         .await
-        .map_err(|e| 
-            debug!("Failed to fetch Planos: {:?}", e)
-        )
-        .expect("Failed to fetch Planos");
+        .map_err(|e| -> _ {
+            debug!("Failed to fetch Planos: {:?}", e);
+            Html("<p>Failed to fetch Planos</p>".to_string())
+        }).expect("Failed to fetch Planos");
 
     let template = ClienteFormTemplate {
         mikrotik_options: mikrotik_list,
         plan_options: plan_list,
     };
 
-    Html(template.render().expect("Failed to render cliente form template"))
+    let template = template.render().map_err(|e| -> _ {
+        error!("Failed to render cliente form template: {:?}", e);
+        Html("<p>Failed to render cliente form template</p>".to_string())
+    }).expect("Failed to render cliente form template");
+
+    Html(template)
 }
 
 pub async fn register_client(
@@ -49,28 +55,37 @@ pub async fn register_client(
     match client.tipo {
         TipoPessoa::PessoaFisica => {
             if cpf::valid(&client.cpf_cnpj) {
-                client.formatted_cpf_cnpj = client.cpf_cnpj.parse::<Cpf>().expect("Failed to parse cpf/cnpj").to_string(); 
+                client.formatted_cpf_cnpj = client.cpf_cnpj.parse::<Cpf>().map_err(|e| -> _ {
+                    error!("Failed to parse cpf/cnpj: {:?}", e);
+                    Html("<p>Failed to parse cpf/cnpj</p>".to_string())
+                }).expect("Failed to parse cpf/cnpj").to_string(); 
             } else {
                 return Html("<p>Invalid CPF</p>".to_string()).into_response();
             }
         }
         TipoPessoa::PessoaJuridica => {
             if cnpj::valid(&client.cpf_cnpj) {
-                client.formatted_cpf_cnpj = client.cpf_cnpj.parse::<Cnpj>().expect("Failed to parse cpf/cnpj").to_string(); 
+                client.formatted_cpf_cnpj = client.cpf_cnpj.parse::<Cnpj>().map_err(|e| -> _ {
+                    error!("Failed to parse cpf/cnpj: {:?}", e);
+                    Html("<p>Failed to parse cpf/cnpj</p>".to_string())
+                }).expect("Failed to parse cpf/cnpj").to_string(); 
             } else {
                 return Html("<p>Invalid CNPJ</p>".to_string()).into_response();
             }
         }
     }
 
-    save_to_db(pool, &client).await;
+    save_to_db(pool, &client).await.map_err(|e| -> _ {
+        error!("Failed to save client to db: {:?}", e);
+        Html("<p>Failed to save client to db</p>".to_string())
+    }).expect("Failed to save client to db");
 
     Redirect::to("/clientes").into_response()
 }
 
 
 //pass the sqlx logic for saving to the db to here
-pub async fn save_to_db(pool: Arc<PgPool>, client: &ClientData) {
+pub async fn save_to_db(pool: Arc<PgPool>, client: &ClientData) -> Result<(), anyhow::Error> {
     let endereco = EnderecoDto {
         cep: client.endereco.cep.cep.clone(),
         rua: client.endereco.rua.clone(),
@@ -96,9 +111,10 @@ pub async fn save_to_db(pool: Arc<PgPool>, client: &ClientData) {
     )
     .fetch_one(&*pool)
     .await
-    .map_err(|e| 
-        debug!("Failed to insert endereco: {:?}", e)
-    ).expect("Failed to insert endereco");
+    .map_err(|e| -> _ {
+        error!("Failed to insert endereco: {:?}", e);
+        anyhow::anyhow!("Failed to insert endereco {e}")
+    }).expect("Failed to insert endereco");
 
     query!(
         "INSERT INTO clientes (tipo, nome, email, cpf_cnpj, formatted_cpf_cnpj, telefone, login, senha, endereco_id, mikrotik_id, plano_id)
@@ -117,9 +133,12 @@ pub async fn save_to_db(pool: Arc<PgPool>, client: &ClientData) {
     )
     .execute(&*pool)
     .await
-    .map_err(|e| 
-        debug!("Failed to insert client: {:?}", e)
-    ).expect("Failed to insert client");
+    .map_err(|e| -> _ {
+        error!("Failed to insert client: {:?}", e);
+        anyhow::anyhow!("Failed to insert client {e}")
+    }).expect("Failed to insert client");
+
+    Ok(())
 }
 
 #[derive(Template)]

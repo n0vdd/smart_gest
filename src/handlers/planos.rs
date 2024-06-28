@@ -1,41 +1,48 @@
 use std::sync::Arc;
 
 use askama::Template;
-use axum::{response::Html, Extension};
+use axum::{response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
+use log::error;
 use serde::{Deserialize, Serialize};
-use sqlx::{prelude::FromRow, PgPool};
+use sqlx::{prelude::FromRow, query, PgPool};
 
 pub async fn show_planos_form() -> Html<String> {
     let template = PlanosFormTemplate;
-    Html(template.render().expect("Failed to render planos form template"))
+
+    let template = template.render().map_err(|e| -> _ {
+        error!("Failed to render planos form template: {:?}", e);
+        Html("Failed to render planos form template".to_string())
+    }).expect("Failed to render planos form template");
+
+    Html(template)
 }
 
 pub async fn register_plano(
     Extension(pool): Extension<Arc<PgPool>>,
     Form(plano): Form<PlanoDto>,
-) -> Html<String> {
-    sqlx::query(
-        "INSERT INTO planos (name, valor, velocidade_up,velocidade_down, descricao, tecnologia)
-        VALUES ($1, $2, $3, $4, $5, $6)"
-    )
-    .bind(&plano.nome)
-    .bind(&plano.valor)
-    .bind(&plano.velocidade_up)
-    .bind(&plano.velocidade_down)
-    .bind(&plano.descricao)
-    .bind(&plano.tecnologia)
+) -> impl IntoResponse {
+    query!(
+        "INSERT INTO planos (nome, valor, velocidade_up,velocidade_down, descricao, tecnologia)
+        VALUES ($1, $2, $3, $4, $5, $6)",
+        plano.nome,
+        plano.valor,
+        plano.velocidade_up,
+        plano.velocidade_down,
+        plano.descricao,
+        plano.tecnologia) 
     .execute(&*pool)
-    .await
-    .expect("Failed to insert Plano");
+    .await.map_err(|e| -> _ {
+        error!("Failed to insert Plano: {:?}", e);
+        return Html("Failed to insert Plano".to_string());
+    }).expect("Failed to insert Plano");
 
-    Html(format!("<p>Plano {} registered successfully!</p>", plano.nome))
+    Redirect::to("/planos")
 }
 //need to show planos_form and register plano to db
 #[derive(Template)]
 #[template(path = "planos_add.html")]
 struct PlanosFormTemplate;
-
 
 #[derive(Deserialize, Serialize, Debug, FromRow)]
 pub struct PlanoDto {

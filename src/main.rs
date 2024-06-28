@@ -7,7 +7,7 @@ use handlers::clients::{register_client, show_cliente_form};
 use handlers::mikrotik::{register_mikrotik,  show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{register_plano, show_planos_form};
 use handlers::utils::{lookup_cep, validate_cpf_cnpj};
-use log::debug;
+use log::{debug, error};
 use tokio::net::TcpListener;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -19,7 +19,11 @@ async fn main() {
     dotenv::dotenv().ok();
     env_logger::init();
 
-    let pool = Arc::new(create_pool().await.expect("erro ao criar pool"));
+    let pool = Arc::new(create_pool().await.map_err(|e| -> _ {
+        error!("erro ao criar pool: {:?}", e);
+        panic!("erro ao criar pool")
+    }).expect("erro ao criar pool"));
+
     debug!("pool:{:?} criado",pool);
 
     let app = Router::new()
@@ -39,7 +43,15 @@ async fn main() {
     debug!("app:{:?} criado",app);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-    let listenet = TcpListener::bind(&addr).await.unwrap();
+
+    let listener = TcpListener::bind(&addr).await.map_err(|e| -> _ {
+        error!("erro ao criar listener: {:?}", e);
+        panic!("erro ao criar listener")
+    }).expect("erro ao criar listener");
+
     println!("Listening on {}", addr);
-    axum::serve(listenet,app.into_make_service()).await.expect("erro ao iniciar o servidor");
+    axum::serve(listener,app.into_make_service()).await.map_err(|e| -> _ {
+        error!("erro ao iniciar o servidor: {:?}", e);
+        panic!("erro ao iniciar o servidor")
+    }).expect("erro ao iniciar o servidor");
 }

@@ -1,7 +1,7 @@
 use askama::Template;
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
-use log::debug;
+use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::{net::Ipv4Addr, str::FromStr, sync::Arc};
 use sqlx::{prelude::FromRow, query, query_as, PgPool};
@@ -19,6 +19,7 @@ pub async fn register_mikrotik(
     if mikrotik.ip.is_loopback() || mikrotik.ip.is_unspecified() {
         return Html("<p>Invalid IP</p>".to_string()).into_response();
     }
+
     debug!("mikrotik:{:?}",mikrotik);
 
     //how do i make this check at compile time?
@@ -33,9 +34,10 @@ pub async fn register_mikrotik(
         mikrotik.senha)
     .execute(&*pool)
     .await
-    .map_err(|e| 
-        debug!("Failed to insert Mikrotik: {:?}", e)
-    ).expect("Failed to insert Mikrotik");
+    .map_err(|e| -> _ {
+        debug!("Failed to insert Mikrotik: {:?}", e);
+        Html("<p>Failed to insert Mikrotik</p>".to_string())
+    }).expect("Failed to insert Mikrotik");
 
     Redirect::to("/mikrotik").into_response()
 }
@@ -45,15 +47,21 @@ pub async fn show_mikrotik_list(
 ) -> Html<String> {
     let mikrotik_list  = query_as!(Mikrotik,"SELECT * FROM mikrotik")
         .fetch_all(&*pool)
-        .await.map_err(|e| 
-            debug!("Failed to fetch Mikrotik: {:?}", e)
-        ).expect("Failed to fetch Mikrotik");
+        .await.map_err(|e| -> _ {
+            debug!("Failed to fetch Mikrotik: {:?}", e);
+            Html("<p>Failed to fetch Mikrotik</p>".to_string())
+        }).expect("Failed to fetch Mikrotik");
 
     let template = MikrotikListTemplate {
         mikrotik_options: mikrotik_list,
     };
 
-    Html(template.render().expect("Failed to render Mikrotik list template"))
+    let template = template.render().map_err(|e| -> _ {
+        error!("Failed to render Mikrotik list template: {:?}", e);
+        Html("<p>Failed to render Mikrotik list template</p>".to_string())
+    }).expect("Failed to render Mikrotik list template");
+
+    Html(template)
 }
 
 pub async fn show_mikrotik_edit_form(
@@ -62,21 +70,32 @@ pub async fn show_mikrotik_edit_form(
 ) -> Html<String> {
     let mikrotik = query_as!(Mikrotik,"SELECT * FROM mikrotik WHERE id = $1",id)
         .fetch_one(&*pool)
-        .await
-        .expect("Failed to fetch Mikrotik");
+        .await.map_err(|e| -> _ {
+            debug!("Failed to fetch Mikrotik for editing: {:?}", e);
+            Html("<p>Failed to fetch Mikrotik</p>".to_string())
+        }).expect("Failed to fetch Mikrotik");
 
     let template = MikrotikEditTemplate {
         mikrotik,
     };
 
-    Html(template.render().expect("Failed to render Mikrotik edit template"))
+    let template = template.render().map_err(|e| -> _ {
+        error!("Failed to render Mikrotik edit template: {:?}", e);
+        Html("<p>Failed to render Mikrotik edit template</p>".to_string())
+    }).expect("Failed to render Mikrotik edit template");
+
+    Html(template)
 }
 
 pub async fn update_mikrotik(
     Extension(pool): Extension<Arc<PgPool>>,
     Form(mikrotik): Form<Mikrotik>,
 ) -> impl IntoResponse {
-    let ip = Ipv4Addr::from_str(&mikrotik.ip).expect("Failed to parse IP");
+    let ip = Ipv4Addr::from_str(&mikrotik.ip).map_err(|e| -> _ {
+        error!("Failed to parse IP: {:?}", e);
+        Html("<p>Failed to parse IP</p>".to_string())
+    }).expect("Failed to parse IP");
+
     if ip.is_loopback() || ip.is_unspecified() {
         return Html("<p>Invalid IP</p>".to_string()).into_response();
     }
@@ -90,10 +109,11 @@ pub async fn update_mikrotik(
         mikrotik.ssh_login,
         mikrotik.ssh_password,
         mikrotik.id
-    )
-    .execute(&*pool)
-    .await
-    .expect("Failed to update Mikrotik");
+    ).execute(&*pool)
+    .await.map_err(|e| -> _ {
+        error!("Failed to update Mikrotik: {:?}", e);
+        Html("<p>Failed to update Mikrotik</p>".to_string())
+    }).expect("Failed to update Mikrotik");
 
     Redirect::to("/mikrotik").into_response()
 }
