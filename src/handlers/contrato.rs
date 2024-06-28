@@ -1,9 +1,44 @@
 //TODO one handler will show a form for uploading the contract html with its name
 
+use askama::Template;
 use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
 
-//TODO talvez preicise ter algo diferente para o contrato gerado
+use super::clients::Endereco;
+
+//TODO criar modelo de dados usados para gerar o contrato
+//terei que buscar como um subset dos dados do cliente(posso pegar pela db)
+#[derive(Template)]
+#[template(path = "contrato_padrao_fibra.html")]
+pub struct ContratoPadraoFibra {
+    client: ClienteContractData,
+    data: String
+}
+
+#[derive(Template)]
+#[template(path = "contrato_padrao_fibra+voip.html")]
+pub struct ContratoPadraoFibraVoip {
+    client: ClienteContractData,
+    data: String
+}
+
+#[derive(Template)]
+#[template(path = "contrato_padrao_voip.html")]
+pub struct ContratoPadraoVoip {
+    client: ClienteContractData,
+    data: String,
+}
+/// Struct for storing formatted client data.
+#[derive(Serialize, Deserialize, Debug)]
+struct ClienteContractData {
+    id: String,
+    nome: String,
+    login: String,
+    endereco: Endereco,
+    formatted_cpf_cnpj: String,
+}
+
+
+/*TODO talvez preicise ter algo diferente para o contrato gerado
 //ter um campo com os templates e um campo para os gerados(linkar com o cliente)
 //Sera os html que o sistema aceita upload
 //ele salva em alguma pasta e linka o caminho
@@ -20,6 +55,7 @@ pub struct Contrato {
     pub nome: String,
     pub path: String,
 }
+   */ 
 //the other will be for generating the contract
 /*based on this code
 use anyhow::Result;

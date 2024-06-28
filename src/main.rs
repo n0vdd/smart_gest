@@ -1,9 +1,9 @@
 mod db;
 mod handlers;
 
-use axum::routing::put;
+use axum::routing::{delete, put};
 use axum::{Router, routing::get, routing::post, extract::Extension};
-use handlers::clients::{register_client, show_cliente_form};
+use handlers::clients::{delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
 use handlers::mikrotik::{register_mikrotik,  show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{register_plano, show_planos_form};
 use handlers::utils::{lookup_cep, validate_cpf_cnpj};
@@ -27,13 +27,16 @@ async fn main() {
     debug!("pool:{:?} criado",pool);
 
     let app = Router::new()
+        .route("/clientes",get(show_cliente_list))
         .route("/cliente", get(show_cliente_form))
-        .route("/cliente", post(register_client))
+        .route("/cliente", post(register_cliente))
+        .route("cliente/:id", put(update_cliente))
+        .route("/cliente/:id", delete(delete_cliente))
         .route("/cep", get(lookup_cep))
         .route("/cpf_cnpj", get(validate_cpf_cnpj))
-        .route("/mikrotik", get(show_mikrotik_list))
-        .route("/mikrotik/add", get(show_mikrotik_form))
-        .route("/mikrotik/add", post(register_mikrotik))
+        .route("/mikrotiks", get(show_mikrotik_list))
+        .route("/mikrotik", get(show_mikrotik_form))
+        .route("/mikrotik", post(register_mikrotik))
         .route("/mikrotik/:id", put(update_mikrotik))
         .route("/mikrotik/:id", get(show_mikrotik_edit_form))
         .route("/plano", get(show_planos_form))
