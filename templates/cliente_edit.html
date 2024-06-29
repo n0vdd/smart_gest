@@ -11,21 +11,25 @@
     <div class="container mx-auto p-4">
         <h1 class="text-2xl font-bold mb-4">Edit Client</h1>
         <form class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4" hx-put="/cliente/{{ client.id }}" hx-target="#response" hx-swap="innerHTML">
+
             <div class="mb-4">
                 <label for="tipo" class="block text-gray-700 text-sm font-bold mb-2">Tipo:</label>
                 <select id="tipo" name="tipo" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                    <option value="PessoaFisica" {% if self.is_pessoa_fisica()%}selected{% endif %}>Pessoa Física</option>
-                    <option value="PessoaJuridica" {% if self.is_pessoa_juridica()%}selected{% endif %}>Pessoa Jurídica</option>
+                    <option value="PessoaFisica" {% if self.is_pessoa_fisica() %}selected{% endif %}>Pessoa Física</option>
+                    <option value="PessoaJuridica" {% if self.is_pessoa_juridica() %}selected{% endif %}>Pessoa Jurídica</option>
                 </select>
             </div>
+
             <div class="mb-4">
                 <label for="nome" class="block text-gray-700 text-sm font-bold mb-2">Nome:</label>
                 <input type="text" id="nome" name="nome" value="{{ client.nome }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
             </div>
+
             <div class="mb-4">
                 <label for="email" class="block text-gray-700 text-sm font-bold mb-2">Email:</label>
                 <input type="text" id="email" name="email" value="{{ client.email }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
             </div>
+
             <div class="mb-4">
                 <label for="cpf_cnpj" class="block text-gray-700 text-sm font-bold mb-2">CPF/CNPJ:</label>
                 <input type="text" id="cpf_cnpj" name="cpf_cnpj" value="{{ client.cpf_cnpj }}"
@@ -35,74 +39,114 @@
                     hx-vals='{"tipo": document.querySelector("#tipo").value, "cpf_cnpj": this.value}'
                     class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
             </div>
+
             <fieldset class="mb-4">
-                <legend class="block text-gray-700 text-sm font-bold mb-2">Endereco:</legend>
+                <legend class="block text-gray-700 text-sm font-bold mb-2">Endereço:</legend>
+
                 <div class="mb-4">
                     <label for="cep" class="block text-gray-700 text-sm font-bold mb-2">CEP:</label>
-                    <input type="text" id="cep" name="endereco.cep" value="{{ client.endereco.cep.cep }}" hx-get="/cep?cep=" hx-trigger="change" hx-target="#address-fields" hx-swap="innerHTML" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    <input type="text" id="cep" name="cep" value="{{ client.cep }}" hx-get="/cep?cep=" hx-trigger="change" hx-target="#address-fields" hx-swap="innerHTML" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                 </div>
+
                 <div id="address-fields">
                     <div class="mb-4">
                         <label for="rua" class="block text-gray-700 text-sm font-bold mb-2">Rua:</label>
-                        <input type="text" id="rua" name="endereco.rua" value="{{ client.endereco.rua }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        <input type="text" id="rua" name="rua" value="{{ client.rua }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                     </div>
+
                     <div class="mb-4">
                         <label for="numero" class="block text-gray-700 text-sm font-bold mb-2">Número:</label>
-                        <input type="text" id="numero" name="endereco.numero" value="{{ client.endereco.numero }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        {% if let Some(numero) = client.numero %}
+                            <input type="text" id="numero" name="numero" value="{{ numero }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        {% else %}
+                            <input type="text" id="numero" name="numero" value="" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        {% endif %}
                     </div>
+                    
                     <div class="mb-4">
                         <label for="bairro" class="block text-gray-700 text-sm font-bold mb-2">Bairro:</label>
-                        <input type="text" id="bairro" name="endereco.bairro" value="{{ client.endereco.bairro }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        <input type="text" id="bairro" name="bairro" value="{{ client.bairro }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                     </div>
+
                     <div class="mb-4">
                         <label for="complemento" class="block text-gray-700 text-sm font-bold mb-2">Complemento:</label>
-                        <input type="text" id="complemento" name="endereco.complemento" value="{{ client.endereco.complemento }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        {% if let Some(complemento) = client.complemento %}
+                            <input type="text" id="complemento" name="complemento" value="{{ complemento }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        {% else %}
+                            <input type="text" id="complemento" name="complemento" value="" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        {% endif %}
                     </div>
+                    
                     <div class="mb-4">
                         <label for="cidade" class="block text-gray-700 text-sm font-bold mb-2">Cidade:</label>
-                        <input type="text" id="cidade" name="endereco.cidade" value="{{ client.endereco.cidade }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        <input type="text" id="cidade" name="cidade" value="{{ client.cidade }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                     </div>
+
                     <div class="mb-4">
                         <label for="estado" class="block text-gray-700 text-sm font-bold mb-2">Estado:</label>
-                        <input type="text" id="estado" name="endereco.estado" value="{{ client.endereco.estado }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        <input type="text" id="estado" name="estado" value="{{ client.estado }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                     </div>
-                    <div class="mb-4 hidden">
-                        <label for="ibge" class="block text-gray-700 text-sm font-bold mb-2">IBGE:</label>
-                        <input type="text" id="ibge" name="endereco.ibge" value="{{ client.endereco.ibge }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+
+                    <div class="mb-4">
+                        <label for="ibge_code" class="block text-gray-700 text-sm font-bold mb-2">IBGE:</label>
+                        <input type="text" id="ibge_code" name="ibge_code" value="{{ client.ibge_code }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                     </div>
                 </div>
             </fieldset>
+
             <div class="mb-4">
                 <label for="login" class="block text-gray-700 text-sm font-bold mb-2">Login:</label>
-                <input type="text" id="login" name="login" value="{{ client.login }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                {% if let Some(login) = client.login %}
+                    <input type="text" id="login" name="login" value="{{ login }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                {% else %}
+                    <input type="text" id="login" name="login" value="" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                {% endif %}
             </div>
+            
             <div class="mb-4">
                 <label for="senha" class="block text-gray-700 text-sm font-bold mb-2">Senha:</label>
-                <input type="password" id="senha" name="senha" value="{{ client.senha }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                {% if let Some(senha) = client.senha %}
+                    <input type="password" id="senha" name="senha" value="{{ senha }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                {% else %}
+                    <input type="password" id="senha" name="senha" value="" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                {% endif %}
             </div>
+            
             <div class="mb-4">
                 <label for="telefone" class="block text-gray-700 text-sm font-bold mb-2">Telefone:</label>
                 <input type="text" id="telefone" name="telefone" value="{{ client.telefone }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
             </div>
+
             <div class="mb-4">
                 <label for="mikrotik_id" class="block text-gray-700 text-sm font-bold mb-2">Mikrotik:</label>
                 <select id="mikrotik_id" name="mikrotik_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                     {% for mikrotik in mikrotik_options %}
-                        <option value="{{ mikrotik.id }}" {% if client.mikrotik_id == Some(mikrotik.id) %}selected{% endif %}>{{ mikrotik.nome }}</option>
+                        {% if let Some(mikrotik_id) = client.mikrotik_id%}
+                            <option value="{{ mikrotik.id }}" {% if mikrotik_id == mikrotik.id %}selected{% endif %}>{{ mikrotik.nome }}</option>
+                        {% else %}
+                            <option value="{{ mikrotik.id }}">{{ mikrotik.nome }}</option>
+                        {% endif %}
                     {% endfor %}
                 </select>
             </div>
+
             <div class="mb-4">
                 <label for="plan_id" class="block text-gray-700 text-sm font-bold mb-2">Planos:</label>
                 <select id="plan_id" name="plan_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                     {% for plan in plan_options %}
-                        <option value="{{ plan.id }}" {% if client.plano_id == Some(plano.id) %}selected{% endif %}>{{ plan.nome }}</option>
+                        {% if let Some(plan_id) = client.plano_id %}
+                            <option value="{{ plan.id }}" {% if plan_id == plan.id %}selected{% endif %}>{{ plan.nome }}</option>
+                        {% else %}
+                            <option value="{{ plan.id }}">{{ plan.nome }}</option>
+                        {% endif %}
                     {% endfor %}
                 </select>
             </div>
+            
             <div class="flex items-center justify-between">
                 <input type="submit" value="Update" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
             </div>
+
         </form>
         <div id="response"></div>
     </div>

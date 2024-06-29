@@ -43,9 +43,20 @@
 
         <p><strong>E:</strong></p>
         <p><strong>{{ client.nome }}</strong></p>
-        <p>{{ client.endereco }}, {{ client.numero }}, {{ client.complemento }}, {{ client.bairro }}, {{ client.cidade }}, {{ client.estado }}</p>
-        <p>CEP: {{ client.cep }}</p>
-        <p>CPF/CNPJ: {{ client.cpf_cnpj }}</p>
+        <p>
+            {{ client.endereco.rua }}, 
+            {% if let Some(numero) = client.endereco.numero %}
+                {{ numero }},
+            {% endif %}
+            {% if let Some(complemento) = client.endereco.complemento %}
+                {{ complemento }},
+            {% endif %}
+            {{ client.endereco.bairro }},
+            {{ client.endereco.cidade }},
+            {{ client.endereco.estado }}
+        </p>
+        <p>CEP: {{ client.endereco.cep.cep }}</p>
+        <p>CPF/CNPJ: {{ client.formatted_cpf_cnpj }}</p>
         <p>(Doravante denominado “CLIENTE”)</p>
 
         <p>Considerando que o CLIENTE deseja contratar os serviços da CONTRATADA, após ter conhecido detalhes técnicos, gerenciais e legais, as partes acordam o seguinte:</p>

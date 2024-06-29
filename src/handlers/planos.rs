@@ -62,8 +62,10 @@ pub struct Plano {
     pub velocidade_up: i32,
     pub velocidade_down: i32,
     pub descricao: Option<String>,
-    // poderia ser uma enum
-    // TODO o template do contrato na real pode ser vinculado ao plano
+    // TODO vincular o template de contrato de acordo com o plano
+    //Tenho que representar os contratos na db
+    //pub contrato: Option<String>,
     pub tecnologia: Option<String>,
+
 }
 

@@ -2,6 +2,7 @@
 
 use askama::Template;
 use serde::{Deserialize, Serialize};
+use sqlx::prelude::FromRow;
 
 use super::clients::Endereco;
 
@@ -33,10 +34,32 @@ struct ClienteContractData {
     id: String,
     nome: String,
     login: String,
+    //TODO display endereco is used here
+    //could do a serde flaten ?
+    //or just use the fields
+    //will need to deal with option either way
     endereco: Endereco,
     formatted_cpf_cnpj: String,
 }
 
+//Contratos sao exibidos com o nome
+//gerados com o template
+//e salvam o caminho do arquivo gerado
+#[derive(Serialize, Deserialize, Debug,FromRow)]
+struct Contrato {
+    nome: String,
+    template: String,
+    path: String,
+}
+
+async fn generate_contract() {
+    //TODO buscar os dados do cliente
+    //TODO buscar o template do contrato
+    //TODO gerar o contrato
+    //TODO salvar o caminho do contrato para a db
+    //TODO salvar o contrato para o sistema de arquivo
+
+}
 
 /*TODO talvez preicise ter algo diferente para o contrato gerado
 //ter um campo com os templates e um campo para os gerados(linkar com o cliente)
