@@ -4,9 +4,10 @@ mod handlers;
 use axum::routing::{delete, put};
 use axum::{Router, routing::get, routing::post, extract::Extension};
 use handlers::clients::{delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
-use handlers::mikrotik::{register_mikrotik,  show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
-use handlers::planos::{register_plano, show_planos_form};
-use handlers::utils::{lookup_cep, validate_cpf_cnpj};
+use handlers::contrato::{add_template, generate_contrato};
+use handlers::mikrotik::{delete_mikrotik, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
+use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
+use handlers::utils::{lookup_cep, validate_cpf_cnpj, validate_phone};
 use log::{debug, error};
 use tokio::net::TcpListener;
 use std::net::SocketAddr;
@@ -26,24 +27,40 @@ async fn main() {
 
     debug!("pool:{:?} criado",pool);
 
-    let app = Router::new()
-        .route("/clientes",get(show_cliente_list))
-        .route("/cliente", get(show_cliente_form))
-        .route("/cliente", post(register_cliente))
-        .route("cliente/:id", put(update_cliente))
-        .route("/cliente/:id", delete(delete_cliente))
+    let clientes_routes = Router::new()
+        .route("/",get(show_cliente_list))
+        .route("/add", get(show_cliente_form))
+        .route("/add", post(register_cliente))
+        .route("/:id", put(update_cliente))
+        .route("/:id", delete(delete_cliente))
+        .route("/contrato/:cliente_id", get(generate_contrato))
         .route("/cep", get(lookup_cep))
-        .route("/cpf_cnpj", get(validate_cpf_cnpj))
-        .route("/mikrotiks", get(show_mikrotik_list))
-        .route("/mikrotik", get(show_mikrotik_form))
-        .route("/mikrotik", post(register_mikrotik))
-        .route("/mikrotik/:id", put(update_mikrotik))
-        .route("/mikrotik/:id", get(show_mikrotik_edit_form))
-        .route("/plano", get(show_planos_form))
-        .route("/plano",post(register_plano))
-        .layer(Extension(pool));
+        .route("/telefone", get(validate_phone))
+        .route("/cpf_cnpj", get(validate_cpf_cnpj));
 
-    debug!("app:{:?} criado",app);
+    let mikrotik_routes = Router::new()
+        .route("/", get(show_mikrotik_list))
+        .route("/add", get(show_mikrotik_form))
+        .route("/add", post(register_mikrotik))
+        .route("/:id", put(update_mikrotik))
+        .route("/:id", delete(delete_mikrotik))
+        .route("/:id", get(show_mikrotik_edit_form));
+
+    let planos_routes = Router::new()
+        .route("/", get(list_planos))
+        .route("/add", get(show_planos_form))
+        .route("/add",post(register_plano))
+        .route("/:id", get(show_plano_edit_form))
+        .route("/:id",put(update_plano))
+        .route("/:id",delete(delete_plano))
+        .route("/contrato_template", get(add_template));
+
+
+    let app = Router::new()
+        .nest("/cliente", clientes_routes)
+        .nest("/mikrotik", mikrotik_routes)
+        .nest("/plano", planos_routes)
+        .layer(Extension(pool));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
 

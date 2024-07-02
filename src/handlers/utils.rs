@@ -4,6 +4,7 @@ use axum::{extract::Query, response::Html};
 use cnpj::Cnpj;
 use cpf::Cpf;
 use log::{debug, error};
+use phonenumber::country::Id::BR;
 use reqwest::Client;
 use serde::Deserialize;
 use thiserror::Error;
@@ -59,6 +60,7 @@ pub async fn lookup_cep(
         debug!("converted response to endereco: {:?}", endereco);
 
         let template = EnderecoSnippetTemplate {
+            cep: endereco.cep,
             rua: endereco.rua,
             bairro: endereco.bairro,
             cidade: endereco.cidade,
@@ -78,56 +80,87 @@ pub async fn lookup_cep(
 }
 
 
+#[derive(Template)]
+#[template(path = "snippets/cpf_cnpj_snippet.html")]
+pub struct CpfCnpjTemplate {
+    pub formatted_cpf_cnpj: String,
+    pub cpf_cnpj: String,
+}
+
+#[derive(Template)]
+#[template(path = "snippets/telefone_snippet.html")]
+pub struct TelefoneTemplate {
+    pub telefone: String,
+}
+
+//TODO validate phonumber(will deal with just brazilian numbers)
+pub async fn validate_phone(Query(phone): Query<TelefoneQuery>) -> Html<String> {
+    debug!("Validating phonelfe number: {:?}", phone.telefone);
+    //TODO check if the phone number is valid
+    let phone = phonenumber::parse(Some(BR), phone.telefone).map_err(
+        |e| -> _ {
+            error!("Failed to parse phone number: {:?}", e);
+            return Html("Failed to parse phone number".to_string())
+        }
+    ).expect("Failed to parse phone number");
+    if !phone.is_valid() {
+        Html("Invalid phone number".to_string())
+    } else {
+        //TODO maybe there is a better way to do this
+        Html("".to_string())
+    }
+}
+
 //TODO this will be called by htmx after the user inputs the cpf/cnpj
 //will use the tipo de pessoa for a check, if the user is a pf or pj
 pub async fn validate_cpf_cnpj(
     Query(cpf_cnpj): Query<CpfCnpjQuery>,
 ) -> Html<String> {
+    debug!("Validating CPF/CNPJ: {:?}", cpf_cnpj.formatted_cpf_cnpj);
     match cpf_cnpj.tipo {
         TipoPessoa::PessoaFisica => {
-            let formatted = cpf_cnpj.cpf_cnpj.parse::<Cpf>().map_err(|e| -> _
+            let formatted = cpf_cnpj.formatted_cpf_cnpj.parse::<Cpf>().map_err(|e| -> _
             {
                 error!("Failed to parse CPF: {:?}", e);
                 Html("Failed to parse CPF".to_string())
             })
             .expect("Failed to parse CPF").to_string();
 
-            return Html(format!(
-                r#"
-                <div class="mb-4">
-                    <label for="cpf_cnpj" class="block text-gray-700 text-sm font-bold mb-2">CPF/CNPJ:</label>
-                    <input type="text" id="cpf_cnpj" name="cpf_cnpj" value="{}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                </div>
-                "#,
-                formatted
-            ));
-        }
+            let template = CpfCnpjTemplate {
+                formatted_cpf_cnpj: formatted,
+                cpf_cnpj: cpf_cnpj.formatted_cpf_cnpj,
+            }.render().map_err(|e| -> _ {
+                error!("Failed to render CPF/CNPJ snippet: {:?}", e);
+                Html("Failed to render CPF/CNPJ snippet".to_string())
+            }).expect("Failed to render CPF/CNPJ snippet");
+
+            Html(template)
+        },
         TipoPessoa::PessoaJuridica => {
-            let formatted = cpf_cnpj.cpf_cnpj.parse::<Cnpj>().map_err(|e| -> _
+            let formatted = cpf_cnpj.formatted_cpf_cnpj.parse::<Cnpj>().map_err(|e| -> _
             {
                 error!("Failed to parse CNPJ: {:?}", e);
                 Html("Failed to parse CNPJ".to_string())
             })
             .expect("Failed to parse CNPJ").to_string();
 
-            //TODO this will be called by htmx after the user inputs the cpf/cnpj
-            //use askama and create the snippet
-            return Html(format!(
-                r#"
-                <div class="mb-4">
-                    <label for="cpf_cnpj" class="block text-gray-700 text-sm font-bold mb-2">CPF/CNPJ:</label>
-                    <input type="text" id="cpf_cnpj" name="cpf_cnpj" value="{}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                </div>
-                "#,
-                formatted
-            ));       
+            let template = CpfCnpjTemplate {
+                formatted_cpf_cnpj: formatted,
+                cpf_cnpj: cpf_cnpj.formatted_cpf_cnpj,
+            }.render().map_err(|e| -> _ {
+                error!("Failed to render CPF/CNPJ snippet: {:?}", e);
+                Html("Failed to render CPF/CNPJ snippet".to_string())
+            }).expect("Failed to render CPF/CNPJ snippet");
+
+            Html(template)
         }
     }
 }
 
 #[derive(Template)]
-#[template(path = "endereco_snippet.html")]
+#[template(path = "snippets/endereco_snippet.html")]
 struct EnderecoSnippetTemplate{
+    cep: String,
     rua: String,
     bairro: String,
     cidade: String,
@@ -137,7 +170,7 @@ struct EnderecoSnippetTemplate{
 
 #[derive(Deserialize)]
 pub struct CpfCnpjQuery {
-    cpf_cnpj: String,
+    formatted_cpf_cnpj: String,
     tipo: TipoPessoa,
 }
 
@@ -162,8 +195,12 @@ pub enum CepError {
 }
 
 #[derive(Deserialize)]
+pub struct TelefoneQuery {
+    telefone: String,
+}
+
+#[derive(Deserialize)]
 pub struct CepQuery {
-    #[serde(rename = "endereco.cep")]
     cep: String,
 }
 

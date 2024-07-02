@@ -46,18 +46,18 @@
     <p><strong>E:</strong></p>
     <p><strong>{{ client.nome }}</strong></p>
     <p>
-        {{ client.endereco.rua }}, 
-        {% if let Some(numero) = client.endereco.numero %}
+        {{ client.rua }}, 
+        {% if let Some(numero) = client.numero %}
             {{ numero }},
         {% endif %}
-        {% if let Some(complemento) = client.endereco.complemento %}
+        {% if let Some(complemento) = client.complemento %}
             {{ complemento }},
         {% endif %}
-        {{ client.endereco.bairro }},
-        {{ client.endereco.cidade }},
-        {{ client.endereco.estado }}
+        {{ client.bairro }},
+        {{ client.cidade }},
+        {{ client.estado }}
     </p>
-    <p>CEP: {{ client.endereco.cep.cep }}</p>
+    <p>CEP: {{ client.cep }}</p>
     <p>CPF/CNPJ: {{ client.formatted_cpf_cnpj }}</p>
     <p>(Doravante denominado “CLIENTE”)</p>
 

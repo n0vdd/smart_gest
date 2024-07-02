@@ -1,4 +1,5 @@
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
+use validator::Validate;
 use std::fmt;
 use askama::Template;
 use axum_extra::extract::Form;
@@ -13,16 +14,16 @@ use crate::handlers::{mikrotik::Mikrotik, planos::Plano};
 
 // Structs and Enums
 
-#[derive(Deserialize, Serialize, Debug, FromRow)]
+#[derive(Deserialize, Serialize, Debug, FromRow,Validate)]
 pub struct ClienteDto {
-    #[serde(flatten)]
     pub tipo: TipoPessoa,
     pub nome: String,
+    #[validate(email)]
     pub email: String,
     pub cpf_cnpj: String,
     pub formatted_cpf_cnpj: String,
     #[serde(flatten)]
-    pub endereco: Endereco,
+    pub endereco: EnderecoDto,
     pub telefone: String,
     pub login: String,
     pub senha: String,
@@ -73,7 +74,7 @@ pub struct Endereco {
     pub ibge: String,
 }
 
-#[derive(Debug)]
+#[derive(Serialize,Deserialize,Debug)]
 pub struct EnderecoDto {
     pub cep: String,
     pub rua: String,
@@ -221,13 +222,14 @@ pub async fn delete_cliente(
         })
         .expect("Failed to delete client");
 
-    Redirect::to("/clientes").into_response()
+    Redirect::to("/cliente").into_response()
 }
 
 pub async fn update_cliente(
     Extension(pool): Extension<Arc<PgPool>>,
     Form(client): Form<Cliente>,
 ) -> impl IntoResponse {
+
 
     query!(
         "UPDATE clientes SET tipo = $1, nome = $2, email = $3, cpf_cnpj = $4, formatted_cpf_cnpj = $5,
@@ -262,7 +264,7 @@ pub async fn update_cliente(
     })
     .expect("Failed to update client");
 
-    Redirect::to("/clientes").into_response()
+    Redirect::to("/cliente").into_response()
 }
 
 pub async fn show_cliente_form(
@@ -356,7 +358,7 @@ pub async fn register_cliente(
         client.senha,
         client.mikrotik_id,
         client.plano_id,
-        client.endereco.cep.cep,
+        client.endereco.cep,
         client.endereco.rua,
         client.endereco.numero,
         client.endereco.bairro,
@@ -373,7 +375,7 @@ pub async fn register_cliente(
     })
     .expect("Failed to insert client");
 
-    Redirect::to("/clientes").into_response()
+    Redirect::to("/cliente").into_response()
 }
 
 // Templates

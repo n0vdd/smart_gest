@@ -22,3 +22,5 @@ dotenv = "0.15.0"
 sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "postgres", "macros"] }
 fantoccini = "0.19.3"
 anyhow = "1.0.86"
+validator = { version = "0.18", features = ["derive"] }
+phonenumber = "0.3"
