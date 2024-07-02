@@ -157,6 +157,10 @@ pub async fn validate_cpf_cnpj(
     }
 }
 
+//TODO gerar dici, tenho a template de como deve ser
+//a formatacao que precisa ser usada e etc,vou precisar da crate de csv
+
+
 #[derive(Template)]
 #[template(path = "snippets/endereco_snippet.html")]
 struct EnderecoSnippetTemplate{

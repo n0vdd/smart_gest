@@ -11,12 +11,13 @@ pub async fn show_mikrotik_form() -> Html<String> {
     Html(template.render().expect("Failed to render Mikrotik form template"))
 }
 
+//TODO make the html appear to the user
 pub async fn delete_mikrotik(Extension(pool): Extension<Arc<PgPool>>) -> impl IntoResponse {
     query!("DELETE FROM mikrotik")
         .execute(&*pool)
         .await.map_err(|e| -> _ {
             error!("Failed to delete Mikrotik: {:?}", e);
-            Html("<p>Failed to delete Mikrotik</p>".to_string())
+            return Html("<p>Failed to delete Mikrotik</p>".to_string())
         }).expect("Failed to delete Mikrotik");
 
     Redirect::to("/mikrotik")
