@@ -3,6 +3,9 @@ name = "smart_gest"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+members = ["radius"]
+
 [dependencies]
 askama = "0.12"
 axum = "0.7"
@@ -20,7 +23,10 @@ tokio = { version = "1", features = ["full"] }
 thiserror = "1.0.61"
 dotenv = "0.15.0"
 sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "postgres", "macros"] }
-fantoccini = "0.19.3"
 anyhow = "1.0.86"
 validator = { version = "0.18", features = ["derive"] }
 phonenumber = "0.3"
+# tenho que enviar a nota fiscal para o cliente(talvez nao precide do dkim)configurado pelo smpt
+#lettre = { version = "0.11.7", features = ["serde","dkim","tokio1","file-transport"] }
+scraper = "0.19.0"
+#quick-xml = {version = "0.35.0", features = ["serde","tokio","serialize"]}

@@ -6,9 +6,30 @@ use serde::{Deserialize, Serialize};
 use std::{net::Ipv4Addr, str::FromStr, sync::Arc};
 use sqlx::{prelude::FromRow, query, query_as, PgPool};
 
+use super::clients::Cliente;
+
 pub async fn show_mikrotik_form() -> Html<String> {
     let template = MikrotikFormTemplate;
     Html(template.render().expect("Failed to render Mikrotik form template"))
+}
+
+//TODO login to mikrotik and create a failover for the radius data
+//will get the clientes of the related mikrotik(and its login)
+//and create the users(login,password and plano) on ppp(with a comment,so that the mikrotik can identify it)
+//disabled by default, if mikrotik cant connect to radius for more than 1 minute, it will use them until radius is back
+//then they will be disabled again
+///! should be called by mikrotik every 1hr(could be a cron job?)
+pub async fn faiolver_radius(mikrotik: MikrotikDto) {
+    //TODO get clientes(login,pass,plano(will need to create it aswell)) for the mikrotik
+    //TODO create this data struct
+
+    //TODO login to mikrotik
+
+    //TODO create the planos(with comment aswell)
+
+    //TODO create disabled clientes
+
+    //?logout?
 }
 
 //TODO make the html appear to the user

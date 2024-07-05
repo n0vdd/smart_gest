@@ -1,22 +1,19 @@
 mod db;
 mod handlers;
+mod services;
 
 use axum::routing::{delete, put};
 use axum::{Router, routing::get, routing::post, extract::Extension};
+use db::create_postgres_pool;
 use handlers::clients::{delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
 use handlers::contrato::{add_template, generate_contrato};
 use handlers::mikrotik::{delete_mikrotik, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, validate_cpf_cnpj, validate_phone};
-use log::{debug, error, info};
-use ngrok::config::TunnelBuilder;
-use ngrok::prelude::TunnelExt;
-use ngrok::tunnel::UrlTunnel;
-use ngrok::{Session, Tunnel};
+use log::{error, info};
 use tokio::net::TcpListener;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use crate::db::create_pool;
 
 
 #[tokio::main]
@@ -24,12 +21,14 @@ async fn main() {
     dotenv::dotenv().ok();
     env_logger::init();
 
-    let pool = Arc::new(create_pool().await.map_err(|e| -> _ {
+    let pg_pool = Arc::new(create_postgres_pool().await
+    .map_err(|e| -> _ {
         error!("erro ao criar pool: {:?}", e);
         panic!("erro ao criar pool")
     }).expect("erro ao criar pool"));
 
-    debug!("pool:{:?} criado",pool);
+
+    info!("postgres pool:{:?} criado",pg_pool);
 
     let clientes_routes = Router::new()
         .route("/",get(show_cliente_list))
@@ -64,17 +63,19 @@ async fn main() {
         .nest("/cliente", clientes_routes)
         .nest("/mikrotik", mikrotik_routes)
         .nest("/plano", planos_routes)
-        .layer(Extension(pool));
+        .layer(Extension(pg_pool));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
 
-    let listener = TcpListener::bind(&addr).await.map_err(|e| -> _ {
+    let listener = TcpListener::bind(&addr).await
+    .map_err(|e| -> _ {
         error!("erro ao criar listener: {:?}", e);
         panic!("erro ao criar listener")
     }).expect("erro ao criar listener");
 
     info!("Listening on {}", addr);
-    axum::serve(listener,app.into_make_service()).await.map_err(|e| -> _ {
+    axum::serve(listener,app.into_make_service()).await
+    .map_err(|e| -> _ {
         error!("erro ao iniciar o servidor: {:?}", e);
         panic!("erro ao iniciar o servidor")
     }).expect("erro ao iniciar o servidor");
