@@ -1,12 +1,24 @@
 use axum::Json;
+use serde::{Deserialize, Serialize};
 
 //TODO implemente a payment received struct for the webhook
 
+#[derive(Serialize,Deserialize,Debug)]
+struct PaymentReceived {
+   id: String,
+   event: String,//will always be PAYMENT_RECEIVED,this need to be checked
+   #[serde(rename = "dateCreated")]
+   date_created: String,
+   //sera usado para linkar ao cliente
+   customer: String,
+   #[serde(rename = "paymentDate")]
+   payment_date: String
+}
 
 //TODO will receive webhook from payment gateway when payment is confirmed
 //todo dia 12 do mes os clientes que nao tiverem um pagamento confirmado serao desativados do servidor radius
 //TODO gerar nota fiscal de servico apos receber pagamento
-async fn receive_payment_confirmed(Json(webhook_data):Json<String>) {
+async fn receive_payment_confirmed(Json(webhook_data):Json<PaymentReceived>) {
     //TODO first check if the payment is already in the database
     //Will save to the db with its id and the client it references to and the payed date
     //! always check if the id is already in the db before dealing with the webhook_data
@@ -14,6 +26,7 @@ async fn receive_payment_confirmed(Json(webhook_data):Json<String>) {
 
     //TODO will have to create a nota fiscal de servico for the client
     //save it to fs and reference it on the db aswell
+    //send an email with the nota_fiscal
 }
 
 /* this is the json received from the webhook
