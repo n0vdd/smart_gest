@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::{net::Ipv4Addr, str::FromStr, sync::Arc};
 use sqlx::{prelude::FromRow, query, query_as, PgPool};
 
-use super::clients::Cliente;
 
 pub async fn show_mikrotik_form() -> Html<String> {
     let template = MikrotikFormTemplate;
@@ -124,7 +123,8 @@ pub async fn update_mikrotik(
     Extension(pool): Extension<Arc<PgPool>>,
     Form(mikrotik): Form<Mikrotik>,
 ) -> impl IntoResponse {
-    let ip = Ipv4Addr::from_str(&mikrotik.ip).map_err(|e| -> _ {
+    let ip = Ipv4Addr::from_str(&mikrotik.ip)
+    .map_err(|e| -> _ {
         error!("Failed to parse IP: {:?}", e);
         Html("<p>Failed to parse IP</p>".to_string())
     }).expect("Failed to parse IP");
