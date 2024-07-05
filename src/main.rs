@@ -8,7 +8,11 @@ use handlers::contrato::{add_template, generate_contrato};
 use handlers::mikrotik::{delete_mikrotik, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, validate_cpf_cnpj, validate_phone};
-use log::{debug, error};
+use log::{debug, error, info};
+use ngrok::config::TunnelBuilder;
+use ngrok::prelude::TunnelExt;
+use ngrok::tunnel::UrlTunnel;
+use ngrok::{Session, Tunnel};
 use tokio::net::TcpListener;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -69,7 +73,7 @@ async fn main() {
         panic!("erro ao criar listener")
     }).expect("erro ao criar listener");
 
-    println!("Listening on {}", addr);
+    info!("Listening on {}", addr);
     axum::serve(listener,app.into_make_service()).await.map_err(|e| -> _ {
         error!("erro ao iniciar o servidor: {:?}", e);
         panic!("erro ao iniciar o servidor")

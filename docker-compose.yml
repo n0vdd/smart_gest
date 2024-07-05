@@ -8,24 +8,34 @@ services:
       - "1812:1812/udp"
       - "1813:1813/udp"
     volumes:
-      - ./freeradius-config:/etc/raddb
+      - "./configs/radius/users:/etc/raddb/users"
+      - "./configs/radius/clients.conf:/etc/raddb/clients.conf"
     environment:
-      - FREERADIUS_USER=freeradius
-      - FREERADIUS_GROUP=freeradius
+      - DB_HOST=mysql
+      - RAD_DEBUG=yes
     depends_on:
-      - freeradius-db
-    restart: unless-stopped
+      - mysql
+    restart: always
+    networks:
+      - smartcom
 
-  freeradius-db:
-    image: postgres:latest
-    container_name: freeradius-db
-    environment:
-      POSTGRES_USER: radius
-      POSTGRES_PASSWORD: radiuspassword
-      POSTGRES_DB: radius
+  mysql:
+    image: mysql
+    container_name: mysql
+    ports:
+      - "3306:3306"
     volumes:
-      - freeradius-db-data:/var/lib/postgresql/data
-    restart: unless-stopped
+      - "./configs/mysql/master/data:/var/lib/mysql"
+      #- "./configs/mysql/master/conf.d:/etc/mysql/conf.d"
+      - "./configs/mysql/radius.sql:/docker-entrypoint-initdb.d/radius.sql"    
+    environment:
+      - MYSQL_ROOT_PASSWORD=radius
+      - MYSQL_USER=radius
+      - MYSQL_PASSWORD=radpass
+      - MYSQL_DATABASE=radius
+    restart: always
+    networks:
+      - smartcom
 
   app-db:
     image: postgres:latest
@@ -39,11 +49,12 @@ services:
     volumes:
       - app-db-data:/var/lib/postgresql/data
     restart: unless-stopped
+    networks:
+      - smartcom
 
-# i want a mikrotik routeros image here
-# mikrotik:   
   routeros:
     image: evilfreelancer/docker-routeros:latest
+    container_name: routeros
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
@@ -57,27 +68,11 @@ services:
       - "5900:5900"
       - "8728:8728"
       - "8729:8729"
-
-
-
- # rust-app:
- #   build:
- #     context: .
- #     dockerfile: Dockerfile
- #   container_name: rust-app
- #   ports:
- #     - "8080:8080"
- #   volumes:
- #     - .:/home/developer/app
- #   depends_on:
- #     - app-db
- #     - freeradius
- #   environment:
- #     - DATABASE_URL=postgres://appuser:apppassword@app-db/appdb
- #     - FREERADIUS_DATABASE_URL=postgres://radius:radiuspassword@freeradius-db/radius
- #   restart: unless-stopped
+    networks:
+      - smartcom
 
 volumes:
-  freeradius-config:
-  freeradius-db-data:
   app-db-data:
+
+networks:
+  smartcom:
