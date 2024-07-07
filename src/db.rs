@@ -1,7 +1,7 @@
-use log::error;
 use sqlx::{Pool, Postgres};
 use sqlx::postgres::PgPoolOptions;
 use dotenv::dotenv;
+use tracing::error;
 use std::env;
 use thiserror::Error;
 
@@ -15,7 +15,7 @@ pub enum DbError {
 
 pub async fn create_postgres_pool() -> Result<Pool<Postgres>> {
     dotenv().ok();
-    let database_url = env::var("POSTGRES_URL").map_err(|e| -> _ {
+    let database_url = env::var("DATABASE_URL").map_err(|e| -> _ {
         error!("DATABASE_URL must be set: {:?}", e);
         DbError::DatabaseError(sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, "DATABASE_URL must be set"))) 
     }).expect("DATABASE_URL must be set");

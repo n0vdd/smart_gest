@@ -6,12 +6,13 @@ use axum::routing::{delete, put};
 use axum::{Router, routing::get, routing::post, extract::Extension};
 use db::create_postgres_pool;
 use handlers::clients::{delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
-use handlers::contrato::{add_template, generate_contrato};
+use handlers::contrato::generate_contrato;
 use handlers::mikrotik::{delete_mikrotik, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, validate_cpf_cnpj, validate_phone};
-use log::{error, info};
+use services::webhooks::webhook_handler;
 use tokio::net::TcpListener;
+use tracing::{error, info};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -19,16 +20,30 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
-    env_logger::init();
+    tracing_subscriber::fmt::init();
 
+    //Setup db
     let pg_pool = Arc::new(create_postgres_pool().await
     .map_err(|e| -> _ {
         error!("erro ao criar pool: {:?}", e);
         panic!("erro ao criar pool")
     }).expect("erro ao criar pool"));
-
-
     info!("postgres pool:{:?} criado",pg_pool);
+
+    //prepara templates dos contratos
+    handlers::contrato::add_template(&pg_pool).await.map_err(|e| {
+        error!("Failed to prepare contrato templates: {:?}", e);
+        panic!("Failed to prepare contrato templates")
+    }).expect("Failed to prepare contrato templates");
+
+
+    /*Setup axum-login
+    let session_store = MemoryStore::default();
+    let session_layer = SessionManagerLayer::new(session_store);
+
+
+    let auth_layer = AuthManagerLayerBuilder::new(,session_layer).build();
+    */
 
     let clientes_routes = Router::new()
         .route("/",get(show_cliente_list))
@@ -55,14 +70,17 @@ async fn main() {
         .route("/add",post(register_plano))
         .route("/:id", get(show_plano_edit_form))
         .route("/:id",put(update_plano))
-        .route("/:id",delete(delete_plano))
-        .route("/contrato_template", get(add_template));
+        .route("/:id",delete(delete_plano));
+        //.route("/contrato_template", get(add_template));
 
+    let financial_routes = Router::new()
+        .route("/webhook", post(webhook_handler));
 
     let app = Router::new()
         .nest("/cliente", clientes_routes)
         .nest("/mikrotik", mikrotik_routes)
         .nest("/plano", planos_routes)
+        .nest("/financeiro", financial_routes)
         .layer(Extension(pg_pool));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));

@@ -1,11 +1,11 @@
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
+use tracing::{debug, error};
 use validator::Validate;
 use std::fmt;
 use askama::Template;
 use axum_extra::extract::Form;
 use cnpj::Cnpj;
 use cpf::Cpf;
-use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use sqlx::{prelude::{FromRow, Type}, query, query_as, Decode, Encode, PgPool, Postgres};

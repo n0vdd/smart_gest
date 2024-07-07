@@ -3,9 +3,9 @@ use std::sync::Arc;
 use askama::Template;
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
-use log::error;
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, query, query_as, PgPool};
+use tracing::error;
 
 use super::contrato::ContratoTemplate;
 

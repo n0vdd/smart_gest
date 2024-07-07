@@ -3,11 +3,11 @@ use askama::Template;
 use axum::{extract::Query, response::Html};
 use cnpj::Cnpj;
 use cpf::Cpf;
-use log::{debug, error};
 use phonenumber::country::Id::BR;
 use reqwest::Client;
 use serde::Deserialize;
 use thiserror::Error;
+use tracing::{debug, error};
 
 use crate::handlers::clients::EnderecoDto;
 

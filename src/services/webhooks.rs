@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::{Extension, Json};
+use axum::{http::status::InvalidStatusCode, response::IntoResponse, Extension, Json};
 use serde::{Deserialize, Serialize};
 use sqlx::{pool, PgPool};
 
@@ -19,7 +19,7 @@ struct PaymentReceived {
 }
 
 #[derive(Serialize,Deserialize,Debug)]
-struct Payload {
+pub struct Payload {
       id: String,
       event: String,
       #[serde(rename = "dateCreated")]
@@ -30,30 +30,30 @@ struct Payload {
 //TODO will receive webhook from payment gateway when payment is confirmed
 //todo dia 12 do mes os clientes que nao tiverem um pagamento confirmado serao desativados do servidor radius
 //TODO gerar nota fiscal de servico apos receber pagamento
-async fn webhook_handler(Json(webhook_data):Json<Payload>,Extension(pool):Extension<Arc<PgPool>>) {
-    //TODO first check if the payment is already in the database
-    if check_if_payment_exists(webhook_data.id,&*pool).await {
-        //TODO send a 200 status code to the payment gateway
-        return;
-    } else {
+pub async fn webhook_handler(Extension(pool):Extension<Arc<PgPool>>,Json(webhook_data):Json<Payload>) -> impl IntoResponse {
+   //TODO first check if the payment is already in the database
+   if check_if_payment_exists(webhook_data.id,&*pool).await {
+      //TODO send a 200 status code to the payment gateway
+
+      axum::http::StatusCode::OK
+   } else {
       match webhook_data.event.as_str() {
          "PAYMENT_RECEIVED" => {
-               //TODO save the payment to the db
-               //TODO send an email to the client with the nota fiscal
-               //TODO send a 200 status code to the payment gateway
+            //TODO save the payment to the db
+            //TODO send an email to the client with the nota fiscal
+            //TODO send a 200 status code to the payment gateway
+            axum::http::StatusCode::OK
          },
          "PAYMENT_DECLINED" => {
+            axum::http::StatusCode::OK
          }
          _ => {
-               //TODO send a 200 status code to the payment gateway
-               //? should not happen, look at the docs at what to do with an unknown event
+            axum::http::StatusCode::OK
+            //TODO send a 200 status code to the payment gateway
          }
       }
    }
    //Will save to the db with its id and the client it references to and the payed date
-   //! always check if the id is already in the db before dealing with the webhook_data
-   //! need to return a 200 status code to the payment gateway before processing it
-
    //TODO will have to create a nota fiscal de servico for the client
    //save it to fs and reference it on the db aswell
    //send an email with the nota_fiscal
@@ -63,7 +63,7 @@ async fn check_if_payment_exists(id: String,pool:&PgPool) -> bool {
     //TODO check if the payment is already in the db
     //TODO return true if it is, false if it is not
 
-    todo!()
+   todo!()
 }
 
 /* this is the json received from the webhook

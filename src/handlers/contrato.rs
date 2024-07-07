@@ -2,14 +2,15 @@
 
 use std::sync::Arc;
 
+use anyhow::{anyhow, Ok};
 use askama::Template;
 use axum::{extract::Path, response::{IntoResponse, Redirect}, Extension};
 use axum_extra::response::Html;
 use chrono::Local;
-use log::error;
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, query, query_as, PgPool};
 use tokio::{fs::{DirBuilder, File}, io::AsyncWriteExt, process::Command};
+use tracing::error;
 
 
 
@@ -90,34 +91,46 @@ pub struct ContratoTemplate {
 }
 
 //Adiciona os templates usados para gerar os contratos
-pub async fn add_template(Extension(pool): Extension<Arc<PgPool>>) -> impl IntoResponse {
-    let mut templates = Vec::new();
-    templates.push(ContratoTemplateDto {
-        nome: "Contrato Fibra".to_string(),
-        path: "contratos/contrato_padrao_fibra.html".to_string()
-    });
-    templates.push(ContratoTemplateDto {
-        nome: "Contrato Fibra+Voip".to_string(),
-        path: "contratos/contrato_padrao_fibra+voip.html".to_string()
-    });
-    templates.push(ContratoTemplateDto {
-        nome: "Contrato Voip".to_string(),
-        path: "contratos/contrato_padrao_voip.html".to_string()
-    });
+//Dont need extension and can return a result
+pub async fn add_template(pool: &PgPool) -> Result<(),anyhow::Error>{
+    let templates = vec![
+        ContratoTemplateDto {
+            nome: "Contrato Fibra".to_string(),
+            path: "contratos/contrato_padrao_fibra.html".to_string()
+        },
+        ContratoTemplateDto {
+            nome: "Contrato Fibra+Voip".to_string(),
+            path: "contratos/contrato_padrao_fibra+voip.html".to_string()
+        },
+        ContratoTemplateDto {
+            nome: "Contrato Voip".to_string(),
+            path: "contratos/contrato_padrao_voip.html".to_string()
+        }];
+
 
     for template in templates {
-        query!(
-            "INSERT INTO contratos_templates (nome , path) VALUES ($1, $2)",
-            template.nome,
-            template.path
-        )
-        .execute(&*pool)
-        .await.map_err(|e| {
-            error!("Failed to insert template: {:?}", e);
-            return Html("<p>Failed to insert template</p>".to_string()) 
-        }).expect("Erro ao inserir template");
+        //Esse erro nao deveria levar o programa a parar
+        //deveria ser tratado de forma mais elegante(logado e seguir a execucao do codigo)
+        let existente = query_as!(ContratoTemplate,
+            "SELECT * FROM contratos_templates WHERE nome = $1",
+            template.nome
+        ).fetch_one(&*pool).await.map_err(|e| {
+            error!("Failed to fetch template: {:?}", e);
+        }).expect("Erro ao buscar template");
+        if existente.nome != template.nome {
+            query!(
+                "INSERT INTO contratos_templates (nome , path) VALUES ($1, $2)",
+                template.nome,
+                template.path
+            )
+            .execute(&*pool)
+            .await.map_err(|e| {
+                error!("Failed to insert template: {:?}", e);
+                anyhow!("Failed to insert template")
+            })?;
+        }
     }
-    Redirect::to("/plano")
+    Ok(())
 }
 
 //It should be saved to a temp html and then converted to pdf
