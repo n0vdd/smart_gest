@@ -114,10 +114,11 @@ pub async fn add_template(pool: &PgPool) -> Result<(),anyhow::Error>{
         let existente = query_as!(ContratoTemplate,
             "SELECT * FROM contratos_templates WHERE nome = $1",
             template.nome
-        ).fetch_one(&*pool).await.map_err(|e| {
+        ).fetch_optional(&*pool).await.map_err(|e| {
             error!("Failed to fetch template: {:?}", e);
         }).expect("Erro ao buscar template");
-        if existente.nome != template.nome {
+
+        if existente.is_none() {
             query!(
                 "INSERT INTO contratos_templates (nome , path) VALUES ($1, $2)",
                 template.nome,
