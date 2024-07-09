@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{http::{self, status::InvalidStatusCode}, response::IntoResponse, Extension, Json};
-use chrono::{Date, Datelike, Local};
+use chrono::{Datelike,  Local};
 use serde::{Deserialize, Serialize};
 use sqlx::{pool, query, query_as, PgPool};
 use time::macros::format_description;
@@ -9,12 +9,50 @@ use tracing::{debug, error};
 
 use crate::handlers::clients::Cliente;
 
-//TODO implemente a payment received struct for the webhook
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum BillingType {
+   Boleto,
+   CreditCard,
+   Undefined,
+   DebitCard,
+   Transfer,
+   Deposit,
+   Pix,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum Event {
+   PaymentCreated,
+   PaymentAwaitingRiskAnalysis,
+   PaymentApprovedByRiskAnalysis,
+   PaymentReprovedByRiskAnalysis,
+   PaymentAuthorized,
+   PaymentUpdated,
+   PaymentConfirmed,
+   PaymentReceived,
+   PaymentCreditCardCaptureRefused,
+   PaymentAnticipated,
+   PaymentOverdue,
+   PaymentDeleted,
+   PaymentRestored,
+   PaymentRefunded,
+   PaymentPartiallyRefunded,
+   PaymentRefundInProgress,
+   PaymentReceivedInCashUndone,
+   PaymentChargebackRequested,
+   PaymentChargebackDispute,
+   PaymentAwaitingChargebackReversal,
+   PaymentDunningReceived,
+   PaymentDunningRequested,
+   PentBankSlipViewed,
+   PaymentCheckoutViewed,
+}
 
 #[derive(Serialize,Deserialize,Debug)]
 struct Payment{
    id: String,
-   event: String,//will always be PAYMENT_RECEIVED,this need to be checked
    #[serde(rename = "dateCreated")]
    date_created: String,
    //sera usado para linkar ao cliente
@@ -23,14 +61,14 @@ struct Payment{
    payment_date: Option<String>,
    #[serde(rename = "confirmedDate")]
    confirmed_date: Option<String>,
-
-
+   #[serde(rename = "billingType")]
+   billing_type: BillingType,
 }
 
 #[derive(Serialize,Deserialize,Debug)]
 pub struct Payload {
       id: String,
-      event: String,
+      event: Event,
       #[serde(rename = "dateCreated")]
       date_created: String,
       payment_data: Payment,
@@ -38,118 +76,132 @@ pub struct Payload {
 
 //todo dia 12 do mes os clientes que nao tiverem um pagamento confirmado serao desativados do servidor radius
 //TODO gerar nota fiscal de servico apos receber pagamento
-//TODO radius deveria checar todo dia 12 os clientes que nao tem um pagamente confirmado 
-pub async fn webhook_handler(Extension(pool):Extension<Arc<PgPool>>,Json(webhook_data):Json<Payload>) -> impl IntoResponse {
+//TODO radius deveria checar todo dia 12 os clientes que nao tem um pagamente confirmado
+pub async fn webhook_handler(
+   Extension(pool):Extension<Arc<PgPool>>,Json(webhook_data):Json<Payload>) -> impl IntoResponse {
       let format = format_description!("[year]-[month]-[day]");
-      //TODO first check if the payment is already in the database
-      match webhook_data.event.as_str() {
-         "PAYMENT_CONFIRMED" => {
-
-            let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
-               error!("Failed to fetch client: {:?}", e);
-               e
-            }).expect("Erro ao buscar cliente");
-
-            //format time for postrgresql
-            let format = format_description!("[year]-[month]-[day]");
-
-            if let Some(data) = &webhook_data.payment_data.payment_date {
-
-               let data = sqlx::types::time::Date::parse(data, format).map_err(|e| {
-                  error!("Failed to parse date: {:?}", e);
+      match webhook_data.event {
+         Event::PaymentConfirmed => {
+            // Check if the event already exists in payment_confirmed table
+            if !check_if_payment_exists(&webhook_data.id, "payment_confirmed", &*pool).await {
+               let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
+                  error!("Failed to fetch client: {:?}", e);
                   e
-               }).expect("Erro ao tranformar string em uma data");
+               }).expect("Erro ao buscar cliente");
 
-               query!("INSERT INTO payment_confirmed (event_id,cliente_id,payment_date) VALUES ($1,$2,$3)"
-               ,webhook_data.id,cliente.id,data).execute(&*pool).await.map_err(|e| {
-                  error!("Failed to save payment: {:?}", e);
-                  e
-               }).expect("Erro ao salvar pagamento");
+               // Format time for PostgreSQL
+               if let Some(data) = &webhook_data.payment_data.payment_date {
+                  let data = sqlx::types::time::Date::parse(data, format).map_err(|e| {
+                     error!("Failed to parse date: {:?}", e);
+                     e
+                  }).expect("Erro ao tranformar string em uma data");
+
+                  query!(
+                     "INSERT INTO payment_confirmed (event_id, cliente_id, payment_date) VALUES ($1, $2, $3)",
+                     webhook_data.id,
+                     cliente.id,
+                     data
+                  )
+                  .execute(&*pool)
+                  .await.map_err(|e| {
+                     error!("Failed to save payment: {:?}", e);
+                     e
+                  }).expect("Erro ao salvar pagamento");
+               }
             }
+
+            //Gero nota fiscal ao confirmar o pagamento e cancela ela ao receber refund
+            match webhook_data.payment_data.billing_type {
+               BillingType::Boleto | BillingType::Pix | BillingType::CreditCard => {
+                  //TODO gerar nota fiscal de servico
+               },
+               _ => {
+                  //TODO mandar algum aviso e logar, nao deveria nem chegar nesse flow
+                  //so vendemoos boleto, cartao de credito e pix
+                  error!("Tipo de pagamento nao suportado: {:?}", webhook_data.payment_data.billing_type);
+               }
+            } 
             http::StatusCode::OK
-         }, 
-         //TODO caso cartao de credito e possivel a compra ser estornada(preciso lidar com esse caso)
-         //caso seja depois do dia 12, bloquear o cliente tambem
-         "PAYMENT_RECEIVED" => {
-            if let Some(confirmed_data) = &webhook_data.payment_data.confirmed_date {
-               let data = sqlx::types::time::Date::parse(confirmed_data, format).map_err(|e| {
-                  error!("Failed to parse date: {:?}", e);
-                  e
-               }).expect("Erro ao tranformar string em uma data");
+         },
+         Event::PaymentReceived => {
+            // Check if the event already exists in payment_received table
+            if !check_if_payment_exists(&webhook_data.id, "payment_received", &*pool).await {
+               if let Some(confirmed_data) = &webhook_data.payment_data.confirmed_date {
+                  let data = time::Date::parse(confirmed_data, format).map_err(|e| {
+                     error!("Failed to parse date: {:?}", e);
+                     e
+                  }).expect("Erro ao tranformar string em uma data");
 
-               let payment_confirmed = query!(
-                  "SELECT id FROM payment_confirmed WHERE payment_date  = $1",
-                  data 
-               ).fetch_optional(&*pool).await.map_err(|e| {
-                  error!("Failed to fetch payment: {:?}", e);
-                  e
-               }).expect("Erro ao buscar pagamento");
-
-               if let Some(confirmed_id) = &payment_confirmed {
-
-                  if let Some(data) = &webhook_data.payment_data.payment_date {
-
-                     let data = sqlx::types::time::Date::parse(data, format).map_err(|e| {
-                        error!("Failed to parse date: {:?}", e);
+                  let payment_confirmed = query!(
+                        "SELECT id FROM payment_confirmed WHERE payment_date = $1",
+                        data
+                     )
+                     .fetch_optional(&*pool)
+                     .await
+                     .map_err(|e| {
+                        error!("Failed to fetch payment: {:?}", e);
                         e
-                     }).expect("Erro ao tranformar string em uma data");
+                     })
+                     .expect("Erro ao buscar pagamento");
 
-                     query!("INSERT INTO payment_received (event_id,payment_confirmed,payment_date) 
-                        VALUES ($1,$2,$3)",webhook_data.id,
-                        confirmed_id.id,data)
-                        .execute(&*pool)
-                        .await.map_err(|e| {
-                           error!("erro ao salvar pagamento {:?}",e);
+                  if let Some(confirmed_id) = payment_confirmed {
+                     if let Some(data) = &webhook_data.payment_data.payment_date {
+                        let data = time::Date::parse(data, format).map_err(|e| {
+                           error!("Failed to parse date: {:?}", e);
                            e
-                        }).expect("Erro ao salvar pagamento");
+                        }).expect("Erro ao tranformar string em uma data");
 
-                        //TODO get the data necessary for nfs generation(relation is in plano trough cliente)
-
-
+                        query!(
+                           "INSERT INTO payment_received (event_id, payment_confirmed, payment_date) VALUES ($1, $2, $3)",
+                           webhook_data.id,
+                           confirmed_id.id,
+                           data
+                        )
+                        .execute(&*pool)
+                        .await
+                        .map_err(|e| {
+                           error!("erro ao salvar pagamento {:?}", e);
+                           e
+                        })
+                        .expect("Erro ao salvar pagamento");
+                     }
                   }
                }
             }
-            //TODO send an email to the client with the nota fiscal
-            //TODO send a 200 status code to the payment gateway
-            axum::http::StatusCode::OK
+            http::StatusCode::OK
          },
-         "PAYMENT_REFUNDED" => {
-            //TODO block client if this is after day 12
+         Event::PaymentRefunded => {
+            //TODO cancelar nota fiscal de servico
             if Local::now().day() > 12 {
-               
+                 // TODO: block client in radius
+            }
+            http::StatusCode::OK
+         }, 
+         Event::PaymentRefundInProgress => {
+            if Local::now().day() > 12 {
+                 // TODO: block client in radius
             }
             http::StatusCode::OK
          },
          _ => {
             http::StatusCode::OK
-            //TODO send a 200 status code to the payment gateway
          }
-      }
    }
-   //Will save to the db with its id and the client it references to and the payed date
-   //TODO will have to create a nota fiscal de servico for the client
-   //save it to fs and reference it on the db aswell
-   //send an email with the nota_fiscal
-
-
-
-//check if the payment is already in the db
-//return true if it is, false if it is not
-async fn check_if_payment_exists(id: &str,pool:&PgPool) -> bool {
-      let event_id = query!(
-         "SELECT event_id FROM payment_received WHERE event_id = $1",
-         id
-      ).fetch_optional(pool).await.map_err(|e| {
-         error!("Failed to fetch payment: {:?}", e);
-         e
-      }).expect("Erro ao buscar pagamento");
-      if event_id.is_none() {
-         false
-      } else {
-         true
-      }
 }
 
+async fn check_if_payment_exists(id: &str, table: &str, pool: &PgPool) -> bool {
+   let query_str = format!("SELECT event_id FROM {} WHERE event_id = $1", table);
+   let event_id = query(&query_str)
+      .bind(id)
+      .fetch_optional(pool)
+      .await
+      .map_err(|e| {
+         error!("Failed to fetch payment: {:?}", e);
+         e
+      })
+      .expect("Erro ao buscar pagamento");
+   event_id.is_some()
+}
 
 #[derive(Serialize,Deserialize,Debug)]
 struct ClienteApi {
