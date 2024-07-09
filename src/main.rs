@@ -2,8 +2,12 @@ mod db;
 mod handlers;
 mod services;
 
+use axum::extract::{FromRequestParts, Request};
+use axum::middleware::Next;
+use axum::response::IntoResponse;
 use axum::routing::{delete, put};
 use axum::{Router, routing::get, routing::post, extract::Extension};
+use axum_client_ip::{SecureClientIp, SecureClientIpSource};
 use db::create_postgres_pool;
 use handlers::clients::{delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
 use handlers::contrato::generate_contrato;
@@ -13,9 +17,12 @@ use handlers::utils::{lookup_cep, validate_cpf_cnpj, validate_phone};
 use services::webhooks::webhook_handler;
 use tokio::net::TcpListener;
 use tracing::{error, info};
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::str::FromStr;
 use std::sync::Arc;
-
+use std::vec;
+use once_cell::sync::Lazy;
+    
 
 #[tokio::main]
 async fn main() {
@@ -74,7 +81,8 @@ async fn main() {
         //.route("/contrato_template", get(add_template));
 
     let financial_routes = Router::new()
-        .route("/webhook", post(webhook_handler));
+        .route("/webhook", post(webhook_handler))
+        .route_layer(SecureClientIpSource::ConnectInfo.into_extension());
 
     let app = Router::new()
         .nest("/cliente", clientes_routes)
@@ -92,7 +100,7 @@ async fn main() {
     }).expect("erro ao criar listener");
 
     info!("Listening on {}", addr);
-    axum::serve(listener,app.into_make_service()).await
+    axum::serve(listener,app.into_make_service_with_connect_info::<SocketAddr>()).await
     .map_err(|e| -> _ {
         error!("erro ao iniciar o servidor: {:?}", e);
         panic!("erro ao iniciar o servidor")

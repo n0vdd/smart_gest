@@ -31,4 +31,6 @@ tracing = {version = "0.1.40",features = ["log"]}
 tracing-subscriber ={version = "0.3.18",features = ["serde","serde_json","tracing"]}
 #axum-login = "0.15.3"
 time = { version =  "0.3.36", features = ["serde-human-readable"] }
+axum-client-ip = "0.6.0"
+once_cell = "1.19.0"
 #quick-xml = {version = "0.35.0", features = ["serde","tokio","serialize"]}

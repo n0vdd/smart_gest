@@ -1,13 +1,28 @@
-use std::sync::Arc;
+use std::{net::{IpAddr, Ipv4Addr}, sync::Arc};
 
 use axum::{http::{self, status::InvalidStatusCode}, response::IntoResponse, Extension, Json};
+use axum_client_ip::SecureClientIp;
 use chrono::{Datelike,  Local};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sqlx::{pool, query, query_as, PgPool};
 use time::macros::format_description;
 use tracing::{debug, error};
 
 use crate::handlers::clients::Cliente;
+
+
+static ASSAS_IPS: Lazy<Vec<IpAddr>> = Lazy::new(|| {
+   vec![
+      IpAddr::V4(Ipv4Addr::new(52,67,12,206)),
+      IpAddr::V4(Ipv4Addr::new(18,230,8,159)),
+      IpAddr::V4(Ipv4Addr::new(54,94,136,112)),
+      IpAddr::V4(Ipv4Addr::new(54,94,183,101)),
+      IpAddr::V4(Ipv4Addr::new(54,207,175,46)),
+      IpAddr::V4(Ipv4Addr::new(54,94,35,137)),
+   ]
+});
+
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -78,7 +93,12 @@ pub struct Payload {
 //TODO gerar nota fiscal de servico apos receber pagamento
 //TODO radius deveria checar todo dia 12 os clientes que nao tem um pagamente confirmado
 pub async fn webhook_handler(
-   Extension(pool):Extension<Arc<PgPool>>,Json(webhook_data):Json<Payload>) -> impl IntoResponse {
+   Extension(ip): Extension<SecureClientIp>, Extension(pool):Extension<Arc<PgPool>>,Json(webhook_data):Json<Payload>) -> impl IntoResponse {
+      //Aceita apenas os ips usados pelo asaas
+      if !ASSAS_IPS.contains(&ip.0) {
+         return http::StatusCode::FORBIDDEN;
+      }
+
       let format = format_description!("[year]-[month]-[day]");
       match webhook_data.event {
          Event::PaymentConfirmed => {
