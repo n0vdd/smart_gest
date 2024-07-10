@@ -2,27 +2,72 @@ mod db;
 mod handlers;
 mod services;
 
-use axum::extract::{FromRequestParts, Request};
+use axum::extract::Request;
+use axum::http;
 use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::{delete, put};
 use axum::{Router, routing::get, routing::post, extract::Extension};
-use axum_client_ip::{SecureClientIp, SecureClientIpSource};
 use db::create_postgres_pool;
 use handlers::clients::{delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
 use handlers::contrato::generate_contrato;
 use handlers::mikrotik::{delete_mikrotik, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, validate_cpf_cnpj, validate_phone};
-use services::webhooks::webhook_handler;
+use once_cell::sync::Lazy;
+use services::webhooks::{debug, webhook_handler};
 use tokio::net::TcpListener;
+use tower::ServiceBuilder;
+use tower_http::trace::TraceLayer;
 use tracing::{error, info};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::str::FromStr;
 use std::sync::Arc;
-use std::vec;
-use once_cell::sync::Lazy;
-    
+
+// Define allowed IPs
+static ALLOWED_IPS: Lazy<Vec<IpAddr>> = Lazy::new(|| {
+    vec![
+        IpAddr::V4(Ipv4Addr::new(52, 67, 12, 206)),
+        IpAddr::V4(Ipv4Addr::new(18, 230, 8, 159)),
+        IpAddr::V4(Ipv4Addr::new(54, 94, 136, 112)),
+        IpAddr::V4(Ipv4Addr::new(54, 94, 183, 101)),
+        IpAddr::V4(Ipv4Addr::new(54, 207, 175, 46)),
+        IpAddr::V4(Ipv4Addr::new(54, 94, 35, 137)),
+    ]
+});
+
+// Define the valid access token
+static VALID_ACCESS_TOKEN: &str = "m+/t\"]9lhtyh{2}s&%Wt";    
+
+//?is this ok?
+async fn check_ip<B>(req: Request<B>, next: Next) -> Result<Next, http::StatusCode> {
+    let client_ip = req
+        .headers()
+        .get("X-Forwarded-For")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|x_forwarded_for| x_forwarded_for.split(',').next())
+        .and_then(|ip_str| ip_str.parse().ok())
+        .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+
+    if ALLOWED_IPS.contains(&client_ip) {
+        Ok(next)
+    } else {
+        Err(http::StatusCode::FORBIDDEN)
+    }
+}
+
+async fn check_access_token<B>(req: Request<B>, next: Next) -> Result<Next, http::StatusCode> {
+    let access_token = req
+        .headers()
+        .get("asaas-access-token")
+        .and_then(|value| value.to_str().ok());
+
+    if access_token == Some(VALID_ACCESS_TOKEN) {
+        Ok(next)
+    } else {
+        Err(http::StatusCode::FORBIDDEN)
+    }
+}
+
 
 #[tokio::main]
 async fn main() {
@@ -81,15 +126,16 @@ async fn main() {
         //.route("/contrato_template", get(add_template));
 
     let financial_routes = Router::new()
-        .route("/webhook", post(webhook_handler))
-        .route_layer(SecureClientIpSource::ConnectInfo.into_extension());
+        .route("/webhook", post(webhook_handler));
 
     let app = Router::new()
         .nest("/cliente", clientes_routes)
         .nest("/mikrotik", mikrotik_routes)
         .nest("/plano", planos_routes)
         .nest("/financeiro", financial_routes)
-        .layer(Extension(pg_pool));
+        //.nest("/financeiro", financial_routes)
+        .layer(Extension(pg_pool))
+        .layer(TraceLayer::new_for_http());
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
 
@@ -105,4 +151,5 @@ async fn main() {
         error!("erro ao iniciar o servidor: {:?}", e);
         panic!("erro ao iniciar o servidor")
     }).expect("erro ao iniciar o servidor");
+
 }

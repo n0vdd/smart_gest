@@ -1,10 +1,9 @@
 use std::{net::{IpAddr, Ipv4Addr}, sync::Arc};
 
-use axum::{http::{self, status::InvalidStatusCode}, response::IntoResponse, Extension, Json};
-use axum_client_ip::SecureClientIp;
+use axum::{extract::Request, http::{self, status::InvalidStatusCode}, response::IntoResponse, Extension, Json};
 use chrono::{Datelike,  Local};
 use once_cell::sync::Lazy;
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Serialize};
 use sqlx::{pool, query, query_as, PgPool};
 use time::macros::format_description;
 use tracing::{debug, error};
@@ -89,15 +88,21 @@ pub struct Payload {
       payment_data: Payment,
 }
 
+pub async fn debug(req:Request) -> impl IntoResponse {
+   debug!("Request: {:?}", req);
+   http::StatusCode::OK
+}
 //todo dia 12 do mes os clientes que nao tiverem um pagamento confirmado serao desativados do servidor radius
 //TODO gerar nota fiscal de servico apos receber pagamento
 //TODO radius deveria checar todo dia 12 os clientes que nao tem um pagamente confirmado
 pub async fn webhook_handler(
-   Extension(ip): Extension<SecureClientIp>, Extension(pool):Extension<Arc<PgPool>>,Json(webhook_data):Json<Payload>) -> impl IntoResponse {
+   Extension(pool):Extension<Arc<PgPool>>,Json(webhook_data):Json<Payload>) -> impl IntoResponse {
       //Aceita apenas os ips usados pelo asaas
+      /* 
       if !ASSAS_IPS.contains(&ip.0) {
          return http::StatusCode::FORBIDDEN;
       }
+      */
 
       let format = format_description!("[year]-[month]-[day]");
       match webhook_data.event {
@@ -344,8 +349,8 @@ async fn find_api_cliente(id:&str,pool: &PgPool) -> Result<Cliente,anyhow::Error
          }
       ],
       "chargeback": {
-          "status": "REQUESTED",
-          "reason": "PROCESS_ERROR"
+         "status": "REQUESTED",
+         "reason": "PROCESS_ERROR"
       },
       "refunds": null
    }
