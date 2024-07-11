@@ -1,35 +1,55 @@
 use std::sync::Arc;
 
-use askama::Template;
-use axum::{response::IntoResponse, Extension};
+use askama:: Template;
+use axum::{response::{Html, IntoResponse}, Extension};
+use axum_extra::extract::Form;
 use chrono::{Datelike, Local };
+use serde::Deserialize;
 use sqlx::{query, query_as, PgPool};
-use time::{Date, PrimitiveDateTime};
+use time::{macros::format_description, Date, PrimitiveDateTime};
+use tokio::{fs::File, io::AsyncWriteExt};
 use tracing::error;
+
+use super::clients::{fetch_tipo_clientes_before_date, Cliente, TipoPessoa};
 
 
 #[derive(Template)]
 #[template(path = "dici_list.html")]
 struct DiciTemplate {
   years: Vec<i32>,
-  months: Vec<u32>,
+  months: Vec<String>,
   dicis: Vec<Dici>,
 }
 
 pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl IntoResponse {
-  let month = chrono::Local::now().month();
-  //?This will return all the months until the actual one
-  let months = chrono::Months::new(month);
-  //?this will return all the months
-  let months = chrono::Months::new(12);
-  let year = Local::now().year();
-  let past_yerar = year - 1;
-  let dici = fetch_dici_records(&pool).await;
+  let current_year = Local::now().year();
+  let past_year = current_year - 1;
 
-  //let template = DiciTemplate { year, month };
+  let months = (1..=12)
+      .map(|month| format!("{:02}/{}", month, current_year))
+      .collect::<Vec<String>>();
+
+  let years = vec![past_year, current_year];
+
+  // Fetch existing DICI records from the database
+  let dicis = fetch_dici_records(&pool).await;
+
+  let template = DiciTemplate { years, months, dicis,}.render()
+  .map_err(|e| {
+    error!("Failed to render DICI list template: {:?}", e);
+    e
+  }).expect("Failed to render DICI list template");
+
+  Html(template)
+}
+#[derive(Deserialize)]
+struct GenerateDiciForm {
+    month: String,
+    year: i32,
 }
 
 struct Dici {
+  id: i32,
   reference_date: Date,
   created_at: Option<PrimitiveDateTime> 
 }
@@ -37,7 +57,7 @@ struct Dici {
 async fn fetch_dici_records(pool: &PgPool) -> Vec<Dici> {
   // Query to fetch DICI records from the database
   query_as!(Dici,
-      "SELECT reference_date,created_at FROM dici ORDER BY reference_date DESC"
+      "SELECT id,reference_date,created_at FROM dici ORDER BY reference_date DESC"
   )
   .fetch_all(pool)
   .await.map_err(|e| {
@@ -46,12 +66,74 @@ async fn fetch_dici_records(pool: &PgPool) -> Vec<Dici> {
   }).expect("Failed to fetch DICI records")
 }
 
+async fn generate_dici(Form(form): Form<GenerateDiciForm>, Extension(pool): Extension<Arc<PgPool>>) -> impl IntoResponse {
+  // Logic to generate DICI and save it to the file system and database
+  let filename = format!("dici_{}-{}.csv", form.year, form.month);
+  let path = format!("dicis/{}", filename);
+  let date_format= format_description!("[month]/[year]");
+  let reference_data = format!("{}/{}", form.month, form.year);
+  let reference_date = time::PrimitiveDateTime::parse(&reference_data, &date_format).expect("Failed to parse reference date");
+
+  //TODO generate DICI CSV file with data
+  //use form month and year
+  //will need to get the clients and compare the created_at date with the reference date
+  // Fetch clients before the reference date
+  let clients = fetch_tipo_clientes_before_date(&pool, reference_date).await;
+
+  let mut pfs: Vec<TipoPessoa> = Vec::new();
+  let mut pjs: Vec<TipoPessoa> = Vec::new();
+  for cliente in clients {
+    match cliente {
+      TipoPessoa::PessoaFisica => pfs.push(cliente),
+      TipoPessoa::PessoaJuridica => pjs.push(cliente)
+  }
+}
 
 
+  // Generate CSV content
+  let mut csv_content = String::from("CNPJ;ANO;MES;COD_IBGE;TIPO_CLIENTE;TIPO_ATENDIMENTO;TIPO_MEIO;TIPO_PRODUTO;TIPO_TECNOLOGIA;VELOCIDADE;ACESSOS\n");
+  let cnpj = "48530335000148"; // Hardcoded CNPJ
+  let cod_ibge = "3106200"; // Hardcoded COD_IBGE
 
+  let append_client_count = |clients: Vec<TipoPessoa>, tipo_cliente: &str, csv_content: &mut String| {
+      if !clients.is_empty() {
+          let client_count = clients.len();
+          let row = format!(
+              "{};{};{};{};{};URBANO;fibra;internet;FTTB;200;{}\n",
+              cnpj,
+              form.year,
+              form.month,
+              cod_ibge,
+              tipo_cliente,
+              client_count
+          );
+          csv_content.push_str(&row);
+      }
+  };
 
+  // Append PF clients
+  append_client_count(pfs, "PF", &mut csv_content);
 
+  // Append PJ clients
+  append_client_count(pjs, "PJ", &mut csv_content);
 
+  // Write CSV content to file
+  let mut file = File::create(&path).await.expect("Failed to create file");
+  file.write_all(csv_content.as_bytes()).await.expect("Failed to write to file");
+
+  let reference_date = time::Date::parse(&reference_data, &date_format).expect("Failed to parse reference date");
+  // Save the DICI to the database
+  sqlx::query!(
+      "INSERT INTO dici (path,reference_date) VALUES ($1,$2)",
+      path, reference_date
+  )
+  .execute(&*pool)
+  .await
+  .unwrap();
+
+  // Respond with the updated list of DICI reports
+  show_dici_list(Extension(pool)).await
+}
 
 
 

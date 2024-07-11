@@ -1,14 +1,16 @@
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
+use chrono::NaiveDateTime;
+use time::{Date, PrimitiveDateTime};
 use tracing::{debug, error};
 use validator::Validate;
-use std::fmt;
+use std::{borrow::Borrow, fmt};
 use askama::Template;
 use axum_extra::extract::Form;
 use cnpj::Cnpj;
 use cpf::Cpf;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use sqlx::{prelude::{FromRow, Type}, query, query_as, Decode, Encode, PgPool, Postgres};
+use sqlx::{postgres::PgRow, prelude::{FromRow, Type}, query, query_as, Decode, Encode, PgPool, Postgres};
 
 use crate::handlers::{mikrotik::Mikrotik, planos::Plano};
 
@@ -60,6 +62,8 @@ pub struct Cliente {
     pub mikrotik_id: Option<i32>,
     pub plano_id: Option<i32>,
     // pub contrato_id: Option<Vec<i32>>
+    pub created_at: Option<PrimitiveDateTime>,
+    pub updated_at: Option<PrimitiveDateTime>,
 }
 
 #[derive(Deserialize, Serialize, Debug, FromRow)]
@@ -418,4 +422,21 @@ impl fmt::Display for Endereco {
         write!(f, "{} - {}, {}, {}, {}, {}", self.rua, self.numero.clone().unwrap_or_default(),
         self.bairro, self.cidade, self.estado, self.cep.cep)
     }
+}
+
+pub async fn fetch_tipo_clientes_before_date(
+    pool: &PgPool,
+    date: PrimitiveDateTime
+) -> Vec<TipoPessoa> {
+    query!("SELECT tipo FROM clientes WHERE created_at < $1", date)
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| -> _ {
+            error!("Failed to fetch clients: {:?}", e);
+            e
+        })
+        .expect("Failed to fetch clients")
+        .iter().map(|row| {
+            TipoPessoa::from_bool(row.tipo)
+        }).collect()
 }

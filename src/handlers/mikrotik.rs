@@ -2,6 +2,7 @@ use askama::Template;
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
 use serde::{Deserialize, Serialize};
+use time::PrimitiveDateTime;
 use tracing::{debug, error};
 use std::{net::Ipv4Addr, str::FromStr, sync::Arc};
 use sqlx::{prelude::FromRow, query, query_as, PgPool};
@@ -169,6 +170,8 @@ pub struct Mikrotik {
     //i think no, its safer
     //it will be used for ssh and doing the fallback logic from radius
     pub ssh_password: Option<String>,
+    pub created_at: Option<PrimitiveDateTime>,
+    pub updated_at: Option<PrimitiveDateTime>,
 }
 
 #[derive(Template)]
