@@ -11,6 +11,7 @@ use axum::{Router, routing::get, routing::post, extract::Extension};
 use db::create_postgres_pool;
 use handlers::clients::{delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
 use handlers::contrato::generate_contrato;
+use handlers::dici::show_dici_list;
 use handlers::mikrotik::{delete_mikrotik, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, validate_cpf_cnpj, validate_phone};
@@ -18,8 +19,9 @@ use once_cell::sync::Lazy;
 use services::webhooks::{debug, webhook_handler};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
@@ -38,8 +40,8 @@ static ALLOWED_IPS: Lazy<Vec<IpAddr>> = Lazy::new(|| {
 // Define the valid access token
 static VALID_ACCESS_TOKEN: &str = "m+/t\"]9lhtyh{2}s&%Wt";    
 
-//?is this ok?
-async fn check_ip<B>(req: Request<B>, next: Next) -> Result<Next, http::StatusCode> {
+//Check the valid asaas-ips
+async fn check_ip(req: Request,next:Next) -> Result<impl IntoResponse,http::StatusCode> {
     let client_ip = req
         .headers()
         .get("X-Forwarded-For")
@@ -48,22 +50,35 @@ async fn check_ip<B>(req: Request<B>, next: Next) -> Result<Next, http::StatusCo
         .and_then(|ip_str| ip_str.parse().ok())
         .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
 
+    debug!("Client IP: {:?}", client_ip);
+    debug!("Allowed IPs: {:?}", ALLOWED_IPS);
+
     if ALLOWED_IPS.contains(&client_ip) {
-        Ok(next)
+        let res = next.run(req).await;
+        Ok(res)
     } else {
+        error!("Invalid IP: {:?}", client_ip);
         Err(http::StatusCode::FORBIDDEN)
     }
 }
 
-async fn check_access_token<B>(req: Request<B>, next: Next) -> Result<Next, http::StatusCode> {
+
+async fn check_access_token(req: Request,next: Next) -> Result<impl IntoResponse, http::StatusCode> {
     let access_token = req
         .headers()
         .get("asaas-access-token")
         .and_then(|value| value.to_str().ok());
 
-    if access_token == Some(VALID_ACCESS_TOKEN) {
-        Ok(next)
+    if let Some(access_token) = access_token {
+        if access_token == VALID_ACCESS_TOKEN {
+            let req = next.run(req).await;
+            Ok(req)
+        } else {
+            error!("Invalid access token: {:?}", access_token);
+            Err(http::StatusCode::FORBIDDEN)
+        }
     } else {
+        error!("Missing access token");
         Err(http::StatusCode::FORBIDDEN)
     }
 }
@@ -126,7 +141,13 @@ async fn main() {
         //.route("/contrato_template", get(add_template));
 
     let financial_routes = Router::new()
-        .route("/webhook", post(webhook_handler));
+        .route("/webhook", post(webhook_handler))
+        
+        .layer(ServiceBuilder::new()
+//              .layer(axum::middleware::from_fn(check_ip))
+                .layer(axum::middleware::from_fn(check_access_token))
+        )
+        .route("/dici", get(show_dici_list));
 
     let app = Router::new()
         .nest("/cliente", clientes_routes)
@@ -136,6 +157,7 @@ async fn main() {
         //.nest("/financeiro", financial_routes)
         .layer(Extension(pg_pool))
         .layer(TraceLayer::new_for_http());
+    //TODO add cors 
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
 

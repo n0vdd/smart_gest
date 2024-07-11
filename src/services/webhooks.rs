@@ -64,12 +64,12 @@ enum Event {
    PaymentCheckoutViewed,
 }
 
-#[derive(Serialize,Deserialize,Debug)]
-struct Payment{
+#[derive(Serialize, Deserialize, Debug)]
+struct Payment {
    id: String,
    #[serde(rename = "dateCreated")]
    date_created: String,
-   //sera usado para linkar ao cliente
+   // sera usado para linkar ao cliente
    customer: String,
    #[serde(rename = "paymentDate")]
    payment_date: Option<String>,
@@ -77,7 +77,34 @@ struct Payment{
    confirmed_date: Option<String>,
    #[serde(rename = "billingType")]
    billing_type: BillingType,
+   value: f64,
+   net_value: f64,
+   original_value: Option<f64>,
+   interest_value: Option<f64>,
+   description: String,
+   can_be_paid_after_due_date: bool,
+   status: String,
+   due_date: String,
+   original_due_date: String,
+   client_payment_date: Option<String>,
+   invoice_url: String,
+   invoice_number: String,
+   external_reference: Option<String>,
+   deleted: bool,
+   anticipated: bool,
+   anticipable: bool,
+   credit_date: Option<String>,
+   estimated_credit_date: Option<String>,
+   transaction_receipt_url: Option<String>,
+   nosso_numero: Option<String>,
+   bank_slip_url: Option<String>,
+   last_invoice_viewed_date: Option<String>,
+   last_bank_slip_viewed_date: Option<String>,
+   postal_service: bool,
+   custody: Option<String>,
+   refunds: Option<String>,
 }
+
 
 #[derive(Serialize,Deserialize,Debug)]
 pub struct Payload {
@@ -97,12 +124,7 @@ pub async fn debug(req:Request) -> impl IntoResponse {
 //TODO radius deveria checar todo dia 12 os clientes que nao tem um pagamente confirmado
 pub async fn webhook_handler(
    Extension(pool):Extension<Arc<PgPool>>,Json(webhook_data):Json<Payload>) -> impl IntoResponse {
-      //Aceita apenas os ips usados pelo asaas
-      /* 
-      if !ASSAS_IPS.contains(&ip.0) {
-         return http::StatusCode::FORBIDDEN;
-      }
-      */
+      debug!("Webhook data: {:?}", webhook_data);
 
       let format = format_description!("[year]-[month]-[day]");
       match webhook_data.event {
@@ -270,6 +292,7 @@ async fn find_api_cliente(id:&str,pool: &PgPool) -> Result<Cliente,anyhow::Error
       Ok(cliente.unwrap())
    }
 }
+
 /* this is the json received from the webhook
    "id": "evt_05b708f961d739ea7eba7e4db318f621&368604920",
    "event":"PAYMENT_RECEIVED",
