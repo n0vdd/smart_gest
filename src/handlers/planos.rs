@@ -59,6 +59,7 @@ pub async fn list_planos(Extension(pool): Extension<Arc<PgPool>>) -> Html<String
 
     Html(html)
 }
+
 pub async fn update_plano(
     Extension(pool): Extension<Arc<PgPool>>,
     Path(id): Path<i32>,
@@ -120,7 +121,6 @@ pub async fn show_plano_edit_form(
 
 
 pub async fn show_planos_form(Extension(pool): Extension<Arc<PgPool>>) -> Html<String> {
-
     let contracts= query_as!(ContratoTemplate, "SELECT * FROM contratos_templates")
         .fetch_all(&*pool)
         .await.map_err(|e| -> _ {

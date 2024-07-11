@@ -5,13 +5,12 @@ use axum::{response::{Html, IntoResponse}, Extension};
 use axum_extra::extract::Form;
 use chrono::{Datelike, Local };
 use serde::Deserialize;
-use sqlx::{query, query_as, PgPool};
+use sqlx::{query_as, PgPool};
 use time::{macros::format_description, Date, PrimitiveDateTime};
 use tokio::{fs::File, io::AsyncWriteExt};
 use tracing::error;
 
-use super::clients::{fetch_tipo_clientes_before_date, Cliente, TipoPessoa};
-
+use super::clients::{fetch_tipo_clientes_before_date,  TipoPessoa};
 
 #[derive(Template)]
 #[template(path = "dici_list.html")]
@@ -42,6 +41,7 @@ pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
 
   Html(template)
 }
+
 #[derive(Deserialize)]
 struct GenerateDiciForm {
     month: String,

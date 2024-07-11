@@ -1,26 +1,13 @@
-use std::{net::{IpAddr, Ipv4Addr}, sync::Arc};
+use std::sync::Arc;
 
-use axum::{extract::Request, http::{self, status::InvalidStatusCode}, response::IntoResponse, Extension, Json};
+use axum::{http::{self}, response::IntoResponse, Extension, Json};
 use chrono::{Datelike,  Local};
-use once_cell::sync::Lazy;
-use serde::{de, Deserialize, Serialize};
-use sqlx::{pool, query, query_as, PgPool};
+use serde::{Deserialize, Serialize};
+use sqlx::{query, query_as, PgPool};
 use time::macros::format_description;
 use tracing::{debug, error};
 
 use crate::handlers::clients::Cliente;
-
-
-static ASSAS_IPS: Lazy<Vec<IpAddr>> = Lazy::new(|| {
-   vec![
-      IpAddr::V4(Ipv4Addr::new(52,67,12,206)),
-      IpAddr::V4(Ipv4Addr::new(18,230,8,159)),
-      IpAddr::V4(Ipv4Addr::new(54,94,136,112)),
-      IpAddr::V4(Ipv4Addr::new(54,94,183,101)),
-      IpAddr::V4(Ipv4Addr::new(54,207,175,46)),
-      IpAddr::V4(Ipv4Addr::new(54,94,35,137)),
-   ]
-});
 
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -115,10 +102,6 @@ pub struct Payload {
       payment_data: Payment,
 }
 
-pub async fn debug(req:Request) -> impl IntoResponse {
-   debug!("Request: {:?}", req);
-   http::StatusCode::OK
-}
 //todo dia 12 do mes os clientes que nao tiverem um pagamento confirmado serao desativados do servidor radius
 //TODO gerar nota fiscal de servico apos receber pagamento
 //TODO radius deveria checar todo dia 12 os clientes que nao tem um pagamente confirmado

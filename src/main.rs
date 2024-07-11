@@ -16,10 +16,9 @@ use handlers::mikrotik::{delete_mikrotik, register_mikrotik, show_mikrotik_edit_
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, validate_cpf_cnpj, validate_phone};
 use once_cell::sync::Lazy;
-use services::webhooks::{debug, webhook_handler};
+use services::webhooks::webhook_handler;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
-use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::{debug, error, info};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -62,7 +61,6 @@ async fn check_ip(req: Request,next:Next) -> Result<impl IntoResponse,http::Stat
     }
 }
 
-
 async fn check_access_token(req: Request,next: Next) -> Result<impl IntoResponse, http::StatusCode> {
     let access_token = req
         .headers()
@@ -83,7 +81,6 @@ async fn check_access_token(req: Request,next: Next) -> Result<impl IntoResponse
     }
 }
 
-
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
@@ -102,15 +99,6 @@ async fn main() {
         error!("Failed to prepare contrato templates: {:?}", e);
         panic!("Failed to prepare contrato templates")
     }).expect("Failed to prepare contrato templates");
-
-
-    /*Setup axum-login
-    let session_store = MemoryStore::default();
-    let session_layer = SessionManagerLayer::new(session_store);
-
-
-    let auth_layer = AuthManagerLayerBuilder::new(,session_layer).build();
-    */
 
     let clientes_routes = Router::new()
         .route("/",get(show_cliente_list))

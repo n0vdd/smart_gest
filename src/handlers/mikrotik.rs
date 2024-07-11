@@ -7,7 +7,6 @@ use tracing::{debug, error};
 use std::{net::Ipv4Addr, str::FromStr, sync::Arc};
 use sqlx::{prelude::FromRow, query, query_as, PgPool};
 
-
 pub async fn show_mikrotik_form() -> Html<String> {
     let template = MikrotikFormTemplate;
     Html(template.render().expect("Failed to render Mikrotik form template"))
@@ -48,7 +47,6 @@ pub async fn register_mikrotik(
     Extension(pool): Extension<Arc<PgPool>>,
     Form(mikrotik): Form<MikrotikDto>,
 ) -> impl IntoResponse {
-
     if mikrotik.ip.is_loopback() || mikrotik.ip.is_unspecified() {
         return Html("<p>Invalid IP</p>".to_string()).into_response();
     }
@@ -187,7 +185,6 @@ pub struct MikrotikDto {
     pub max_clientes: Option<i32>,
     pub login: Option<String>,
     pub senha: Option<String>,
-
 }
 
 #[derive(Template)]

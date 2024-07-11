@@ -1,21 +1,19 @@
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
-use chrono::NaiveDateTime;
-use time::{Date, PrimitiveDateTime};
+use time::PrimitiveDateTime;
 use tracing::{debug, error};
 use validator::Validate;
-use std::{borrow::Borrow, fmt};
+use std::fmt;
 use askama::Template;
 use axum_extra::extract::Form;
 use cnpj::Cnpj;
 use cpf::Cpf;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use sqlx::{postgres::PgRow, prelude::{FromRow, Type}, query, query_as, Decode, Encode, PgPool, Postgres};
+use sqlx::{prelude::{FromRow, Type}, query, query_as, Decode, Encode, PgPool, Postgres};
 
 use crate::handlers::{mikrotik::Mikrotik, planos::Plano};
 
 // Structs and Enums
-
 #[derive(Deserialize, Serialize, Debug, FromRow,Validate)]
 pub struct ClienteDto {
     pub tipo: TipoPessoa,
@@ -212,6 +210,7 @@ pub async fn show_cliente_edit_form(
     Html(template)
 }
 */
+
 pub async fn delete_cliente(
     Path(id): Path<i32>,
     Extension(pool): Extension<Arc<PgPool>>,
