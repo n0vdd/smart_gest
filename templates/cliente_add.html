@@ -1,120 +1,131 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register Client</title>
-    <script src="https://unpkg.com/htmx.org@1.5.0"></script>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-</head>
-<body class="bg-gray-100">
-    <div class="container mx-auto p-4">
-        <h1 class="text-2xl font-bold mb-4">Register Client</h1>
-        <!--TODO will need to redo this with a simple post-->
-        <form class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4" method="POST" action="/cliente/add">
+{% extends "snippets/base.html" %}
+
+{% block title %}Lista de Clientes{% endblock %}
+
+{% block content %} 
+<h1 class="text-2xl font-bold mb-4">Register Client</h1>
+    <!--TODO will need to redo this with a simple post-->
+    <form class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4" method="POST" action="/cliente/add">
+        <div class="mb-4">
+            <label for="tipo" class="block text-gray-700 text-sm font-bold mb-2">Tipo:</label>
+            <select id="tipo" name="tipo" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                <option value="pessoafisica">Pessoa Física</option>
+                <option value="pessoajuridica">Pessoa Jurídica</option>
+            </select>
+        </div>
+
+        <div class="mb-4">
+            <label for="nome" class="block text-gray-700 text-sm font-bold mb-2">Nome:</label>
+            <input type="text" id="nome" name="nome" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        </div>
+
+        <div class="mb-4">
+            <label for="email" class="block text-gray-700 text-sm font-bold mb-2">Email:</label>
+            <input type="text" id="email" name="email" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        </div>
+
+        <div class="mb-4">
+            <label for="telefone" class="block text-gray-700 text-sm font-bold mb-2">Telefone:</label>
+            <input type="text" id="telefone" name="telefone" hx-get="/cliente/telefone" hx-trigger="change" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        </div>
+
+        <div class="mb-4" id="cpfs">
             <div class="mb-4">
-                <label for="tipo" class="block text-gray-700 text-sm font-bold mb-2">Tipo:</label>
-                <select id="tipo" name="tipo" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                    <option value="pessoafisica">Pessoa Física</option>
-                    <option value="pessoajuridica">Pessoa Jurídica</option>
-                </select>
+            <!--the one used for contract generation and etc-->
+            <label for="formatted_cpf_cnpj" class="block text-gray-700 text-sm font-bold mb-2">CPF/CNPJ:</label>
+            <input type="text" id="formatted_cpf_cnpj" name="formatted_cpf_cnpj"
+                hx-get="/cliente/cpf_cnpj"
+                hx-trigger="change"
+                hx-swap="innerHTML"
+                hx-target="#cpfs"
+                hx-include="[name='tipo']"
+                class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
             </div>
-            <div class="mb-4">
-                <label for="nome" class="block text-gray-700 text-sm font-bold mb-2">Nome:</label>
-                <input type="text" id="nome" name="nome" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-            </div>
-            <div class="mb-4">
-                <label for="email" class="block text-gray-700 text-sm font-bold mb-2">Email:</label>
-                <input type="text" id="email" name="email" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-            </div>
-            <div class="mb-4">
-                <label for="telefone" class="block text-gray-700 text-sm font-bold mb-2">Telefone:</label>
-                <input type="text" id="telefone" name="telefone" hx-get="/cliente/telefone" hx-trigger="change" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-            </div>
-            <div class="mb-4" id="cpfs">
+            <!--this contains the unformatted data for nfs generation later-->
+            <div class="mb-4" style="display: none;">
+                <input type="text" id="cpf_cnpj" name="cpf_cnpj" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div> 
+        </div>
+
+        <fieldset class="mb-4">
+            <div id="address-fields">
                 <div class="mb-4">
-                <!--the one used for contract generation and etc-->
-                <label for="formatted_cpf_cnpj" class="block text-gray-700 text-sm font-bold mb-2">CPF/CNPJ:</label>
-                <input type="text" id="formatted_cpf_cnpj" name="formatted_cpf_cnpj"
-                    hx-get="/cliente/cpf_cnpj"
-                    hx-trigger="change"
-                    hx-swap="innerHTML"
-                    hx-target="#cpfs"
-                    hx-include="[name='tipo']"
-                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    <label for="cep" class="block text-gray-700 text-sm font-bold mb-2">CEP:</label>
+                    <input type="text" id="cep" name="cep" hx-get="/cliente/cep" hx-trigger="change" hx-target="#address-fields" hx-swap="innerHTML" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                 </div>
-                <!--this contains the unformatted data for nfs generation later-->
-                <div class="mb-4" style="display: none;">
-                    <input type="text" id="cpf_cnpj" name="cpf_cnpj" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                </div> 
-            </div>
-            <fieldset class="mb-4">
-                <div id="address-fields">
-                    <div class="mb-4">
-                        <label for="cep" class="block text-gray-700 text-sm font-bold mb-2">CEP:</label>
-                        <input type="text" id="cep" name="cep" hx-get="/cliente/cep" hx-trigger="change" hx-target="#address-fields" hx-swap="innerHTML" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                    </div>
-                    <div class="mb-4">
-                        <label for="rua" class="block text-gray-700 text-sm font-bold mb-2">Rua:</label>
-                        <input type="text" id="rua" name="rua" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                    </div>
-                    <div class="mb-4">
-                        <label for="numero" class="block text-gray-700 text-sm font-bold mb-2">Número:</label>
-                        <input type="text" id="numero" name="numero" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                    </div>
-                    <div class="mb-4">
-                        <label for="bairro" class="block text-gray-700 text-sm font-bold mb-2">Bairro:</label>
-                        <input type="text" id="bairro" name="bairro" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                    </div>
-                    <div class="mb-4">
-                        <label for="complemento" class="block text-gray-700 text-sm font-bold mb-2">Complemento:</label>
-                        <input type="text" id="complemento" name="complemento" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                    </div>
-                    <div class="mb-4">
-                        <label for="cidade" class="block text-gray-700 text-sm font-bold mb-2">Cidade:</label>
-                        <input type="text" id="cidade" name="cidade" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                    </div>
-                    <div class="mb-4">
-                        <label for="estado" class="block text-gray-700 text-sm font-bold mb-2">Estado:</label>
-                        <input type="text" id="estado" name="estado" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                    </div>
+
+                <div class="mb-4">
+                    <label for="rua" class="block text-gray-700 text-sm font-bold mb-2">Rua:</label>
+                    <input type="text" id="rua" name="rua" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                </div>
+
+                <div class="mb-4">
+                    <label for="numero" class="block text-gray-700 text-sm font-bold mb-2">Número:</label>
+                    <input type="text" id="numero" name="numero" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                </div>
+
+                <div class="mb-4">
+                    <label for="bairro" class="block text-gray-700 text-sm font-bold mb-2">Bairro:</label>
+                    <input type="text" id="bairro" name="bairro" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                </div>
+
+                <div class="mb-4">
+                    <label for="complemento" class="block text-gray-700 text-sm font-bold mb-2">Complemento:</label>
+                    <input type="text" id="complemento" name="complemento" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                </div>
+
+                <div class="mb-4">
+                    <label for="cidade" class="block text-gray-700 text-sm font-bold mb-2">Cidade:</label>
+                    <input type="text" id="cidade" name="cidade" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                </div>
+
+                <div class="mb-4">
+                    <label for="estado" class="block text-gray-700 text-sm font-bold mb-2">Estado:</label>
+                    <input type="text" id="estado" name="estado" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                </div>
+
                     <!-- make this be hidden,just need to pass the value to the server-->
-                    <div class="mb-4"  style="display: none;">
-                        <label for="ibge" class="block text-gray-700 text-sm font-bold mb-2 hidden">IBGE:</label>
-                        <input type="text" id="ibge" name="ibge" class="hidden shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                    </div>
+                <div class="mb-4"  style="display: none;">
+                    <label for="ibge" class="block text-gray-700 text-sm font-bold mb-2 hidden">IBGE:</label>
+                    <input type="text" id="ibge" name="ibge" class="hidden shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                 </div>
-            </fieldset>
-            <div class="mb-4">
-                <label for="login" class="block text-gray-700 text-sm font-bold mb-2">Login:</label>
-                <input type="text" id="login" name="login" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
             </div>
-            <div class="mb-4">
-                <label for="senha" class="block text-gray-700 text-sm font-bold mb-2">Senha:</label>
-                <input type="senha" id="senha" name="senha" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-            </div>
-          
-            <div class="mb-4">
-                <label for="mikrotik_id" class="block text-gray-700 text-sm font-bold mb-2">Mikrotik:</label>
-                <select id="mikrotik_id" name="mikrotik_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                    {% for mikrotik in mikrotik_options %}
-                        <option value="{{ mikrotik.id }}">{{ mikrotik.nome }} - {{ mikrotik.ip }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="mb-4">
-                <label for="plano_id" class="block text-gray-700 text-sm font-bold mb-2">Planos:</label>
-                <select id="plano_id" name="plano_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                    {% for plan in plan_options %}
-                        <option value="{{ plan.id }}">{{ plan.nome }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="flex items-center justify-between">
-                <input type="submit" value="Register" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-            </div>
-        </form>
-        <div id="response"></div>
-    </div>
-</body>
-</html>
+        </fieldset>
+
+        <div class="mb-4">
+            <label for="login" class="block text-gray-700 text-sm font-bold mb-2">Login:</label>
+            <input type="text" id="login" name="login" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        </div>
+
+        <div class="mb-4">
+            <label for="senha" class="block text-gray-700 text-sm font-bold mb-2">Senha:</label>
+            <input type="senha" id="senha" name="senha" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        </div>
+
+        <div class="mb-4">
+            <label for="mikrotik_id" class="block text-gray-700 text-sm font-bold mb-2">Mikrotik:</label>
+            <select id="mikrotik_id" name="mikrotik_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                {% for mikrotik in mikrotik_options %}
+                    <option value="{{ mikrotik.id }}">{{ mikrotik.nome }} - {{ mikrotik.ip }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-4">
+            <label for="plano_id" class="block text-gray-700 text-sm font-bold mb-2">Planos:</label>
+            <select id="plano_id" name="plano_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                {% for plan in plan_options %}
+                    <option value="{{ plan.id }}">{{ plan.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="flex items-center justify-between">
+            <input type="submit" value="Register" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+        </div>
+    </form>
+
+    <!-- TODO create a place for error display relevant to the field at hand-->
+    <div id="response"></div>
+</div>
+{% endblock %}

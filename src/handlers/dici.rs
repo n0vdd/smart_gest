@@ -1,39 +1,45 @@
 use std::sync::Arc;
 
 use askama:: Template;
-use axum::{response::{Html, IntoResponse}, Extension};
+use axum::{response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
-use chrono::{Datelike, Local };
+use chrono::{Datelike, Local, SubsecRound };
+use phonenumber::country::Id::YE;
 use serde::Deserialize;
 use sqlx::{query_as, PgPool};
 use time::{macros::format_description, Date, PrimitiveDateTime};
 use tokio::{fs::File, io::AsyncWriteExt};
-use tracing::error;
+use tracing::{error,debug};
+use tracing_subscriber::field::debug;
 
 use super::clients::{fetch_tipo_clientes_before_date,  TipoPessoa};
 
 #[derive(Template)]
 #[template(path = "dici_list.html")]
 struct DiciTemplate {
-  years: Vec<i32>,
-  months: Vec<String>,
+  reference_date: Vec<String>,
   dicis: Vec<Dici>,
 }
 
 pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl IntoResponse {
   let current_year = Local::now().year();
-  let past_year = current_year - 1;
+  let month = Local::now().month();
 
-  let months = (1..=12)
-      .map(|month| format!("{:02}/{}", month, current_year))
+  let mut reference_date = (1..=12)
+      .map(|month| format!("{:02}_{}", month, current_year))
+      .collect::<Vec<String>>();
+  
+  let mut past_reference_date = (1..=12)
+      .map(|month| format!("{:02}_{}", month, current_year - 1))
       .collect::<Vec<String>>();
 
-  let years = vec![past_year, current_year];
+  reference_date.append(&mut past_reference_date);
+
 
   // Fetch existing DICI records from the database
   let dicis = fetch_dici_records(&pool).await;
 
-  let template = DiciTemplate { years, months, dicis,}.render()
+  let template = DiciTemplate { reference_date, dicis,}.render()
   .map_err(|e| {
     error!("Failed to render DICI list template: {:?}", e);
     e
@@ -43,9 +49,8 @@ pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
 }
 
 #[derive(Deserialize)]
-struct GenerateDiciForm {
-    month: String,
-    year: i32,
+pub struct GenerateDiciForm {
+  reference_date: String,
 }
 
 struct Dici {
@@ -66,30 +71,43 @@ async fn fetch_dici_records(pool: &PgPool) -> Vec<Dici> {
   }).expect("Failed to fetch DICI records")
 }
 
-async fn generate_dici(Form(form): Form<GenerateDiciForm>, Extension(pool): Extension<Arc<PgPool>>) -> impl IntoResponse {
+pub async fn generate_dici(Extension(pool): Extension<Arc<PgPool>>,Form(form): Form<GenerateDiciForm> ) -> impl IntoResponse {
   // Logic to generate DICI and save it to the file system and database
-  let filename = format!("dici_{}-{}.csv", form.year, form.month);
-  let path = format!("dicis/{}", filename);
-  let date_format= format_description!("[month]/[year]");
-  let reference_data = format!("{}/{}", form.month, form.year);
-  let reference_date = time::PrimitiveDateTime::parse(&reference_data, &date_format).expect("Failed to parse reference date");
 
-  //TODO generate DICI CSV file with data
-  //use form month and year
-  //will need to get the clients and compare the created_at date with the reference date
-  // Fetch clients before the reference date
-  let clients = fetch_tipo_clientes_before_date(&pool, reference_date).await;
+
+
+  //Formato para comparar com o created_t na db 
+  let date_format= format_description!("[day]_[month]_[year]_[hour]:[minute]:[second].[subsecond]");
+  let rf = format!("{}_{}_{}", Local::now().day(),form.reference_date,Local::now().time());
+  debug!("Date struct for comparing with timestamp in db: {:?}", rf);
+  let reference_date = time::PrimitiveDateTime::parse(&rf, &date_format).expect("Failed to parse reference date");
+  let clients = fetch_tipo_clientes_before_date(&pool,reference_date).await;
 
   let mut pfs: Vec<TipoPessoa> = Vec::new();
   let mut pjs: Vec<TipoPessoa> = Vec::new();
+
   for cliente in clients {
     match cliente {
       TipoPessoa::PessoaFisica => pfs.push(cliente),
       TipoPessoa::PessoaJuridica => pjs.push(cliente)
+    }
   }
-}
+  debug!("Pessoa Fisica: {:?}", pfs);
+  debug!("Pessoa Juridica: {:?}", pjs);
 
 
+  //Formatacao para nao haver erros ao salvar no sistema de arquivos
+  let filename = format!("dici_{}.csv", form.reference_date);
+  let path = format!("dicis/{}", filename);
+
+  //Pegando dados para colocar no csv
+  let mut splits = form.reference_date.split("_");
+  let month = splits.nth(0).expect("falhar ao pegar mes de referencia");
+  //debug!("Month: {:?}", month);
+  //debug!("Splits: {:?}", splits);
+  let year = splits.nth(0).expect("falhar ao pegar ano de referencia");
+
+ 
   // Generate CSV content
   let mut csv_content = String::from("CNPJ;ANO;MES;COD_IBGE;TIPO_CLIENTE;TIPO_ATENDIMENTO;TIPO_MEIO;TIPO_PRODUTO;TIPO_TECNOLOGIA;VELOCIDADE;ACESSOS\n");
   let cnpj = "48530335000148"; // Hardcoded CNPJ
@@ -101,8 +119,8 @@ async fn generate_dici(Form(form): Form<GenerateDiciForm>, Extension(pool): Exte
           let row = format!(
               "{};{};{};{};{};URBANO;fibra;internet;FTTB;200;{}\n",
               cnpj,
-              form.year,
-              form.month,
+              year,
+              month,
               cod_ibge,
               tipo_cliente,
               client_count
@@ -121,18 +139,23 @@ async fn generate_dici(Form(form): Form<GenerateDiciForm>, Extension(pool): Exte
   let mut file = File::create(&path).await.expect("Failed to create file");
   file.write_all(csv_content.as_bytes()).await.expect("Failed to write to file");
 
-  let reference_date = time::Date::parse(&reference_data, &date_format).expect("Failed to parse reference date");
+  let date_format= format_description!("[day]_[month]_[year]");
+  let rf = format!("{}_{}", Local::now().day(),form.reference_date);  
+  //Parse the reference date for the db
+  let reference_date = time::Date::parse(&rf, &date_format).expect("Failed to parse reference date");
+  debug!("Reference Date struct: {:?}", reference_date);
   // Save the DICI to the database
   sqlx::query!(
       "INSERT INTO dici (path,reference_date) VALUES ($1,$2)",
       path, reference_date
   )
   .execute(&*pool)
-  .await
-  .unwrap();
+  .await.map_err(|e| {
+      error!("Failed to save DICI record to the database: {:?}", e);
+      e
+  }).expect("Failed to save DICI record to the database");
 
-  // Respond with the updated list of DICI reports
-  show_dici_list(Extension(pool)).await
+  Redirect::to("/financeiro/dici")
 }
 
 

@@ -6,7 +6,7 @@ use anyhow::{anyhow, Ok};
 use askama::Template;
 use axum::{extract::Path, response::{IntoResponse, Redirect}, Extension};
 use axum_extra::response::Html;
-use chrono::Local;
+use chrono::{Datelike, Local};
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, query, query_as, PgPool};
 use tokio::{fs::{DirBuilder, File}, io::AsyncWriteExt, process::Command};
@@ -173,11 +173,15 @@ pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(clien
                 return Html("<p>Failed to fetch client data</p>".to_string());
         }).expect("Erro ao buscar dados do cliente");
 
+    let day = Local::now().day();
+    let month = Local::now().month();
+    let year = Local::now().year();
+    let data = format!("{}/{}/{}",day,month,year);
 
     //TODO There should be a better way to do this
     let template = match client.contrato_template_nome.as_str() {
         "Contrato Fibra" => {
-            let template = ContratoPadraoFibra { client: client.clone() , data: Local::now().to_string()}.render().map_err(
+            let template = ContratoPadraoFibra { client: client.clone() , data}.render().map_err(
             |e| {
                 error!("Failed to render contract fibra template: {:?}", e);
                 e
@@ -185,25 +189,23 @@ pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(clien
         (template,"".to_string())
         },
         "Contrato Fibra+Voip" => {
-            let template = ContratoPadraoFibraVoip { client: client.clone() , data: Local::now().to_string() }.render().map_err(|e| -> _ {
+            let template = ContratoPadraoFibraVoip { client: client.clone() , data:data.clone()}.render().map_err(|e| -> _ {
             error!("Failed to render contract fibra+voip template: {:?}", e);
             e
         }).expect("Erro ao renderizar contrato fibra+voip");
-            let template2 = ContratoPadraoVoip { client: client.clone() , data: Local::now().to_string() }
+            let template2 = ContratoPadraoVoip { client: client.clone() , data}
             .render().map_err(|e| -> _ {
                 error!("Failed to render contract voip template: {:?}", e);
                 e}).expect("Erro ao renderizar contrato voip");
             (template,template2)
         },
-        "Contrato Voip" => {  let template = ContratoPadraoFibraVoip { client: client.clone() , data: Local::now().to_string() }.render().map_err(|e| -> _ {
-            error!("Failed to render contract fibra+voip template: {:?}", e);
-            e
-        }).expect("Erro ao renderizar contrato fibra+voip");
-            let template2 = ContratoPadraoVoip { client: client.clone() , data: Local::now().to_string() }
+        "Contrato Voip" => {  
+            let template = ContratoPadraoVoip { client: client.clone() , data}
             .render().map_err(|e| -> _ {
                 error!("Failed to render contract voip template: {:?}", e);
-                e}).expect("Erro ao renderizar contrato voip");
-            (template,template2)
+                e
+            }).expect("Erro ao renderizar contrato voip");
+            (template,"".to_string())
         },
         _ => return Html("<p>Invalid contract template</p>").into_response()
     };
@@ -234,7 +236,7 @@ pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(clien
             error!("Failed to create HTML file: {:?}", e);
             e
         }).expect("Erro ao criar arquivo html")
-        .write_all(template.0.as_bytes()).await.map_err(|e| {
+        .write_all(template.1.as_bytes()).await.map_err(|e| {
             error!("Failed to write HTML to file: {:?}", e);
             e
         }).expect("Erro ao salvar html em arquivo");

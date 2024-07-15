@@ -11,7 +11,7 @@ use axum::{Router, routing::get, routing::post, extract::Extension};
 use db::create_postgres_pool;
 use handlers::clients::{delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
 use handlers::contrato::generate_contrato;
-use handlers::dici::show_dici_list;
+use handlers::dici::{generate_dici, show_dici_list};
 use handlers::mikrotik::{delete_mikrotik, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, validate_cpf_cnpj, validate_phone};
@@ -135,6 +135,7 @@ async fn main() {
 //              .layer(axum::middleware::from_fn(check_ip))
                 .layer(axum::middleware::from_fn(check_access_token))
         )
+        .route("/generate_dici",post(generate_dici))
         .route("/dici", get(show_dici_list));
 
     let app = Router::new()

@@ -1,66 +1,67 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Plano</title>
-    <script src="https://unpkg.com/htmx.org@1.5.0"></script>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-</head>
-<body class="bg-gray-100">
-    <div class="container mx-auto p-4">
-        <h1 class="text-2xl font-bold mb-4">Edit Plano</h1>
-        <form class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4" hx-put="/plano/{{ plano.id }}" hx-target="#response" hx-swap="innerHTML">
-            <input type="hidden" name="_method" value="PUT">
-            <div class="mb-4">
-                <label for="nome" class="block text-gray-700 text-sm font-bold mb-2">Nome:</label>
-                <input type="text" id="nome" name="nome" value="{{ plano.nome }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-            </div>
-            <div class="mb-4">
-                <label for="valor" class="block text-gray-700 text-sm font-bold mb-2">Valor:</label>
-                <input type="number" id="valor" name="valor" step="0.01" value="{{ plano.valor }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-            </div>
-            <div class="mb-4">
-                <label for="velocidade_down" class="block text-gray-700 text-sm font-bold mb-2">Velocidade de Download (Mbps):</label>
-                <input type="number" id="velocidade_down" name="velocidade_down" value="{{ plano.velocidade_down }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-            </div>
-            <div class="mb-4">
-                <label for="velocidade_up" class="block text-gray-700 text-sm font-bold mb-2">Velocidade de Upload (Mbps):</label>
-                <input type="number" id="velocidade_up" name="velocidade_up" value="{{ plano.velocidade_up }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-            </div>
-            <div class="mb-4">
-                <label for="descricao" class="block text-gray-700 text-sm font-bold mb-2">Descrição:</label>
-                {% if let Some(descricao) = plano.descricao %}
-                    <textarea id="descricao" name="descricao" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">{{ descricao }}</textarea>
-                {% else %}
-                    <textarea id="descricao" name="descricao" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"></textarea>
-                {% endif %}
-            </div>
-            <div class="mb-4">
-                <label for="tecnologia" class="block text-gray-700 text-sm font-bold mb-2">Tecnologia:</label>
-                {% if let Some(tecnologia) = plano.tecnologia %}
-                    <input type="text" id="tecnologia" name="tecnologia" value="{{ tecnologia }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                {% else %}
-                    <input type="text" id="tecnologia" name="tecnologia" value="" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                {% endif %}
-            </div>
-            <div class="mb-4">
-                <label for="contrato_template_id" class="block text-gray-700 text-sm font-bold mb-2">Contrato Template:</label>
-                <select id="contrato_template_id" name="contrato_template_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                    {% for contrato in contracts %}
-                        {% if contrato.id == plano.contrato_template_id %}
-                            <option value="{{ contrato.id }}" selected>{{ contrato.nome }}</option>
-                        {% else %}
-                            <option value="{{ contrato.id }}">{{ contrato.nome }}</option>
-                        {% endif %}
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="flex items-center justify-between">
-                <input type="submit" value="Update" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-            </div>
-        </form>
-        <div id="response"></div>
-    </div>
-</body>
-</html>
+{% extends "snippets/base.html" %}
+
+{% block title %}Edit Plano{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Edit Plano</h1>
+    <form class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4" hx-put="/plano/{{ plano.id }}" hx-target="#response" hx-swap="innerHTML">
+        <!--?this should be htmx?-->
+        <input type="hidden" name="_method" value="PUT">
+        <div class="mb-4">
+            <label for="nome" class="block text-gray-700 text-sm font-bold mb-2">Nome:</label>
+            <input type="text" id="nome" name="nome" value="{{ plano.nome }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        </div>
+
+        <div class="mb-4">
+            <label for="valor" class="block text-gray-700 text-sm font-bold mb-2">Valor:</label>
+            <input type="number" id="valor" name="valor" step="0.01" value="{{ plano.valor }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        </div>
+
+        <div class="mb-4">
+            <label for="velocidade_down" class="block text-gray-700 text-sm font-bold mb-2">Velocidade de Download (Mbps):</label>
+            <input type="number" id="velocidade_down" name="velocidade_down" value="{{ plano.velocidade_down }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        </div>
+
+        <div class="mb-4">
+            <label for="velocidade_up" class="block text-gray-700 text-sm font-bold mb-2">Velocidade de Upload (Mbps):</label>
+            <input type="number" id="velocidade_up" name="velocidade_up" value="{{ plano.velocidade_up }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        </div>
+
+        <div class="mb-4">
+            <label for="descricao" class="block text-gray-700 text-sm font-bold mb-2">Descrição:</label>
+            {% if let Some(descricao) = plano.descricao %}
+                <textarea id="descricao" name="descricao" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">{{ descricao }}</textarea>
+            {% else %}
+                <textarea id="descricao" name="descricao" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"></textarea>
+            {% endif %}
+        </div>
+
+        <div class="mb-4">
+            <label for="tecnologia" class="block text-gray-700 text-sm font-bold mb-2">Tecnologia:</label>
+            {% if let Some(tecnologia) = plano.tecnologia %}
+                <input type="text" id="tecnologia" name="tecnologia" value="{{ tecnologia }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            {% else %}
+                <input type="text" id="tecnologia" name="tecnologia" value="" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            {% endif %}
+        </div>
+
+        <div class="mb-4">
+            <label for="contrato_template_id" class="block text-gray-700 text-sm font-bold mb-2">Contrato Template:</label>
+            <select id="contrato_template_id" name="contrato_template_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                {% for contrato in contracts %}
+                    {% if contrato.id == plano.contrato_template_id %}
+                        <option value="{{ contrato.id }}" selected>{{ contrato.nome }}</option>
+                    {% else %}
+                        <option value="{{ contrato.id }}">{{ contrato.nome }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="flex items-center justify-between">
+            <input type="submit" value="Update" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+        </div>
+    </form>
+    <div id="response"></div>
+</div>
+{% endblock %}
