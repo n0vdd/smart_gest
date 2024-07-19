@@ -57,6 +57,7 @@ pub struct Cliente {
     pub login: Option<String>,
     //TODO convert this on cliente_edit.html
     pub senha: Option<String>,
+    //TODO this should not be optional
     //The only 2 i32
     //they are commented out in the html now
     pub mikrotik_id: Option<i32>,
