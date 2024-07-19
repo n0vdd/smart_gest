@@ -12,7 +12,7 @@ use db::create_postgres_pool;
 use handlers::clients::{delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
 use handlers::contrato::generate_contrato;
 use handlers::dici::{generate_dici, show_dici_list};
-use handlers::mikrotik::{delete_mikrotik, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
+use handlers::mikrotik::{delete_mikrotik, failover_radius,  register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, validate_cpf_cnpj, validate_phone};
 use once_cell::sync::Lazy;
@@ -94,6 +94,16 @@ async fn main() {
     }).expect("erro ao criar pool"));
     info!("postgres pool:{:?} criado",pg_pool);
 
+    /* 
+    let mysql_pool = Arc::new(radius::create_mysql_pool().await
+    .map_err(|e| -> _ {
+        error!("erro ao criar pool: {:?}", e);
+        panic!("erro ao criar pool")
+    }).expect("erro ao criar pool"));
+    info!("mysql pool:{:?} criado",mysql_pool);
+    */
+
+
     //prepara templates dos contratos
     handlers::contrato::add_template(&pg_pool).await.map_err(|e| {
         error!("Failed to prepare contrato templates: {:?}", e);
@@ -117,6 +127,7 @@ async fn main() {
         .route("/add", post(register_mikrotik))
         .route("/:id", put(update_mikrotik))
         .route("/:id", delete(delete_mikrotik))
+        .route("/radius/:id",get(failover_radius))
         .route("/:id", get(show_mikrotik_edit_form));
 
     let planos_routes = Router::new()
@@ -145,6 +156,7 @@ async fn main() {
         .nest("/financeiro", financial_routes)
         //.nest("/financeiro", financial_routes)
         .layer(Extension(pg_pool))
+//        .layer(Extension(mysql_pool))
         .layer(TraceLayer::new_for_http());
     //TODO add cors 
 

@@ -1,8 +1,10 @@
+use sqlx::migrate::Migrator;
 use sqlx::{Pool, Postgres};
 use sqlx::postgres::PgPoolOptions;
 use dotenv::dotenv;
 use tracing::error;
 use std::env;
+use std::path::Path;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, DbError>;
@@ -26,6 +28,16 @@ pub async fn create_postgres_pool() -> Result<Pool<Postgres>> {
             error!("Failed to create pool: {:?}", e);
             DbError::DatabaseError(sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, "Failed to create pool")))
         })?;
+
+    
+    Migrator::new(Path::new("./migrations")).await.map_err(|e| {
+        error!("Failed to create migrator: {:?}", e);
+        DbError::DatabaseError(sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, "Failed to create migrator")))
+    })?.run(&pool).await.map_err(|e| {
+        error!("Failed to run migrations: {:?}", e);
+        DbError::DatabaseError(sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, "Failed to run migrations")))
+    })?;
+    
     Ok(pool)
 }
 

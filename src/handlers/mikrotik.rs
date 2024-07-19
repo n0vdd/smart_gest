@@ -4,31 +4,64 @@ use axum_extra::extract::Form;
 use serde::{Deserialize, Serialize};
 use time::PrimitiveDateTime;
 use tracing::{debug, error};
-use std::{net::Ipv4Addr, str::FromStr, sync::Arc};
+use std::{io::{Read, Write}, net::{Ipv4Addr, TcpStream},  str::FromStr, sync::Arc};
 use sqlx::{prelude::FromRow, query, query_as, PgPool};
+
+use crate::handlers::{clients::{self, Cliente}, planos::Plano};
 
 pub async fn show_mikrotik_form() -> Html<String> {
     let template = MikrotikFormTemplate;
     Html(template.render().expect("Failed to render Mikrotik form template"))
 }
 
-//TODO login to mikrotik and create a failover for the radius data
-//will get the clientes of the related mikrotik(and its login)
-//and create the users(login,password and plano) on ppp(with a comment,so that the mikrotik can identify it)
-//disabled by default, if mikrotik cant connect to radius for more than 1 minute, it will use them until radius is back
-//then they will be disabled again
-///! should be called by mikrotik every 1hr(could be a cron job?)
-pub async fn faiolver_radius(mikrotik: MikrotikDto) {
-    //TODO get clientes(login,pass,plano(will need to create it aswell)) for the mikrotik
-    //TODO create this data struct
+//Create the script with html template?
+pub async fn failover_radius(Path(mikrotik_id):Path<i32>,Extension(pool):Extension<Arc<PgPool>>) -> impl IntoResponse {
+    let planos = query_as!(Plano,"SELECT * FROM planos")
+        .fetch_all(&*pool)
+        .await.map_err(|e| -> _ {
+            error!("Failed to fetch Planos: {:?}", e);
+            return Html("<p>Failed to fetch Planos</p>".to_string())
+        }).expect("Failed to fetch Planos");
 
-    //TODO login to mikrotik
+    let clientes = query_as!(Cliente,"SELECT * FROM clientes WHERE mikrotik_id = $1",mikrotik_id)
+        .fetch_all(&*pool)
+        .await.map_err(|e| -> _ {
+            error!("Failed to fetch Clientes: {:?}", e);
+            return Html("<p>Failed to fetch Clientes</p>".to_string())
+        }).expect("Failed to fetch Clientes");
 
-    //TODO create the planos(with comment aswell)
+    let mut commands = String::new();
+    //remove previous profiles
+    commands.push_str(format!(r#":foreach profile in=[/ppp/profile/find where comment="smart_gest"] do={{/ppp/profile/remove $profile}}
+    "#).as_str());
+    //remove previous clientes 
+    commands.push_str(format!(r#":foreach cliente in=[/ppp/secret/find where comment="smart_gest"] do={{/ppp/secret/remove $cliente}}
+    "#).as_str());
 
-    //TODO create disabled clientes
+    for plano in &planos {
+        debug!("adicionando plano ao script: {:?}",plano);
+        //TODO criar planos sem ser com mbs, terei que alterar aqui
+        //add profiles
+        commands.push_str(format!(r#"/ppp/profile/add name="{}" rate-limit={}m/{}m only-one=yes comment="smart_gest"
+        "#,
+            plano.nome,plano.velocidade_down,plano.velocidade_up).as_str());
+    }
 
-    //?logout?
+    for cliente in &clientes {
+        debug!("adicionando cliente ao script: {:?}",cliente);
+        let plano_name = planos.iter().find(|plano| plano.id == cliente.plano_id.expect("impossivel achar plano"))
+            .map(|plano_name| { plano_name.nome.clone() })
+            .expect("impossivel achar plano");
+
+        //add clients
+
+        //TODO escape mikrotik problem chars(can deal with the optional login and senha better and do this in the same part of the code)
+        commands.push_str(format!(r#"/ppp/secret/add name="{}" password="{}" profile="{}" service=pppoe comment="smart_gest" disabled=yes
+        "#,
+            cliente.login.as_ref().expect("impossivel encontrar login"),cliente.senha.as_ref().expect("impossivel achar senha"),plano_name).as_str());
+    }
+
+    commands
 }
 
 //TODO make the html appear to the user

@@ -13,6 +13,8 @@ use sqlx::{prelude::{FromRow, Type}, query, query_as, Decode, Encode, PgPool, Po
 
 use crate::handlers::{mikrotik::Mikrotik, planos::Plano};
 
+use crate::services::webhooks::add_cliente_to_asaas;
+
 // Structs and Enums
 #[derive(Deserialize, Serialize, Debug, FromRow,Validate)]
 pub struct ClienteDto {
@@ -377,6 +379,9 @@ pub async fn register_cliente(
         anyhow::anyhow!("Failed to insert client {e}")
     })
     .expect("Failed to insert client");
+
+    //TODO savf clientes to asaas as well
+    add_cliente_to_asaas(&client).await;
 
     Redirect::to("/cliente").into_response()
 }
