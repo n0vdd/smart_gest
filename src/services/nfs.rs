@@ -10,8 +10,10 @@
 const CNPJ: &str = "48530335000148";
 const PASSWORD: &str = "oU6jlxL7RpUY7JB3TAqD";
 const ID_MUNICIPIO: &str = "17428";
+const ID_SERVICO: &str= "103";
+const ID_CNAE: &str = "117019000";
+const DESCRICAO: &str = "Serviço de internet";
 
-use std::time::Duration;
 
 use fantoccini::{Client, ClientBuilder, Locator};
 use tracing::error;
@@ -21,7 +23,7 @@ use crate::handlers::clients::Cliente;
 
 //TODO gera nota fiscal para os clientes que tiverem o pagamento confirmado
 //TODO pegar os valores para o scraper usando f12
-pub async fn gera_nfs(cliente:Cliente) {
+pub async fn gera_nfs(cliente:Cliente,value:f32) {
 
     let client = ClientBuilder::native().connect("http://localhost:4444").await.map_err(|e| {
         error!("failed to connect to WebDriver: {:?}", e);
@@ -45,7 +47,8 @@ pub async fn gera_nfs(cliente:Cliente) {
     }).expect("failed to click element");
 
     input_cliente(&client, cliente.cpf_cnpj.as_str()).await;
-    
+
+    dados_nfs(&cliente, &client, value).await;
 
     //enviar e rececer a nota fiscal
     //salvar a mesma para o sistema de arquivos
@@ -89,7 +92,7 @@ async fn input_cliente(client: &Client,cpf_cnpj: &str) {
         error!("failed to find municipio prestador de servico input element: {:?}", e);
         e
     }).expect("failed to find input element")
-    .send_keys("17428")
+    .send_keys(ID_MUNICIPIO)
     .await.map_err(|e| {
         error!("failed to input municipio prestador de servico: {:?}", e);
         e
@@ -107,7 +110,7 @@ async fn input_cliente(client: &Client,cpf_cnpj: &str) {
     }).expect("failed to click button");
 }
 
-async fn dados_nfs(cliente:&Cliente,client: &Client) {
+async fn dados_nfs(cliente:&Cliente,client: &Client,value:f32) {
     // Locate the "Razão Social" input element by its ID
     let razao_social_element = client.find(Locator::Css("#vCTBRAZSOC"))
     .await.map_err(|e| {
@@ -116,13 +119,14 @@ async fn dados_nfs(cliente:&Cliente,client: &Client) {
     })
     .expect("failed to find Razão Social input element");
 
-    // Check if the field is filled, if not input the name of the client
+    // Caso nao se tenha a razao social
     let current_value = razao_social_element.prop("value")
     .await.map_err(|e| {
         error!("failed to get value of Razão Social input element: {:?}", e);
         e
     }).expect("failed to get value of Razão Social input element");
 
+    //Seta com o nome do cliente
     if current_value.is_none() {
     razao_social_element.send_keys(&cliente.nome)
         .await.map_err(|e| {
@@ -131,7 +135,7 @@ async fn dados_nfs(cliente:&Cliente,client: &Client) {
         }).expect("failed to input Razão Social value");
     }
 
-    // Fill in the vNOMLOG input field
+    // Seta o nome do logradouro
     client.find(Locator::Css("#vNOMLOG"))
     .await.map_err(|e| {
         error!("failed to find nome logradouro input element: {:?}", e);
@@ -145,34 +149,36 @@ async fn dados_nfs(cliente:&Cliente,client: &Client) {
     })
     .expect("failed to input value in vNOMLOG");
 
-    // Fill in the vCTBENDNUMERO input field
-    client.find(Locator::Css("#vCTBENDNUMERO"))
-    .await.map_err(|e| {
-        error!("failed to find endereco numero input element: {:?}", e);
-        e
-    })
-    .expect("failed to find endereco numero input element")
-    .send_keys("2287")
-    .await.map_err(|e| {
-        error!("failed to input value in endereco numero: {:?}", e);
-        e
-    }).expect("failed to input value in endereco numero");
 
-    // Fill in the vCTBCOMPLE input field
-    client.find(Locator::Css("#vCTBCOMPLE"))
-    .await.map_err(|e| {
-        error!("failed to find complemento input element: {:?}", e);
-        e
-    })
-    .expect("failed to find complemento input element")
-    .send_keys("SALA 810")
-    .await.map_err(|e| {
-        error!("failed to input value in complemento: {:?}", e);
-        e
-    })
-    .expect("failed to input value in complemento");
+    //Seta o numero caso ele exista
+    if let Some(numero) = &cliente.numero {
+        // Fill in the vCTBENDNUMERO input field
+        client.find(Locator::Css("#vCTBENDNUMERO"))
+        .await.map_err(|e| {
+            error!("failed to find endereco numero input element: {:?}", e);
+            e
+        })
+        .expect("failed to find endereco numero input element")
+        .send_keys(numero.as_ref())
+        .await.map_err(|e| {
+            error!("failed to input value in endereco numero: {:?}", e);
+            e
+        }).expect("failed to input value in endereco numero");
+    }
+    
+    //Seta o complemento caso ele exista
+    if let Some(complement) = &cliente.complemento {
+        client.find(Locator::Css("#vCTBCOMPLE")).await.map_err(|e| {
+            error!("failed to find complemento input element: {:?}", e);
+            e
+        }).expect("failed to find complemento input element")
+        .send_keys(&complement).await.map_err(|e| {
+            error!("failed to input value in complemento: {:?}", e);
+            e
+        }).expect("failed to input value in complemento");
+    }
 
-    // Fill in the vCTBCEP input field
+    //Seta o cep(de acordo com o endereco do cliente) 
     client.find(Locator::Css("#vCTBCEP"))
     .await.map_err(|e| {
         error!("failed to find cep input element: {:?}", e);
@@ -185,7 +191,73 @@ async fn dados_nfs(cliente:&Cliente,client: &Client) {
         e
     })
     .expect("failed to input value in cep");
+
+    //Seta a id do municipio(fixo)
+    client.find(Locator::Css("#vMUNID"))
+    .await.map_err(|e| {
+        error!("failed to find municipio input element: {:?}", e);
+        e
+    }).expect("failed to find municipio input element").
+    send_keys(ID_MUNICIPIO).await.map_err(|e| {
+        error!("failed to input value in municipio: {:?}", e);
+        e
+    }).expect("failed to input value in municipio");
+
+    //Seta o codigo do servico(fixo)
+    client.find(Locator::Css("#vSRVSIGLA"))
+    .await.map_err(|e| {
+        error!("failed to find sigla input element: {:?}", e);
+        e
+    }).expect("failed to find sigla input element")
+    .send_keys(ID_SERVICO).await.map_err(|e| {
+        error!("failed to input value in sigla: {:?}", e);
+        e
+    }).expect("failed to input value in sigla");
+
+    //Seta o valor do servico de acordo com o plano do cliente
+    client.find(Locator::Css("#vNFIVLRSRV"))
+    .await.map_err(|e| {
+        error!("failed to find valor servico input element: {:?}", e);
+        e
+    }).expect("failed to find valor servico input element")
+    .send_keys(&value.to_string()).await.map_err(|e| {
+        error!("failed to input value in valor servico: {:?}", e);
+        e
+    }).expect("failed to input value in valor servico");
+
+    //Codigo CNAE sempre sera o mesmo
+    client.find(Locator::Css("#vNBSCODIGO"))
+    .await.map_err(|e| {
+        error!("failed to find codigo input element: {:?}", e);
+        e
+    }).expect("failed to find codigo input element")
+    .send_keys(ID_CNAE).await.map_err(|e| {
+        error!("failed to input value in codigo: {:?}", e);
+        e
+    }).expect("failed to input value in codigo");
+
+    //Descricao geral do servico
+    client.find(Locator::Css("#vNFSDSCGERAL"))
+    .await.map_err(|e| {
+        error!("failed to find descricao input element: {:?}", e);
+        e
+    }).expect("failed to find descricao input element")
+    .send_keys(DESCRICAO).await.map_err(|e| {
+        error!("failed to input value in descricao: {:?}", e);
+        e
+    }).expect("failed to input value in descricao");
+
+    //Clilca para visualizar a nota fiscal
+    client.find(Locator::Css("#BUTTON3")).await.map_err(|e| {
+        error!("failed to find button element: {:?}", e);
+        e
+    }).expect("failed to find button element")
+    .click().await.map_err(|e| {
+        error!("failed to click button: {:?}", e);
+        e
+    }).expect("failed to click button");
 }
+
 // Example usage
 async fn login(client: &Client) {
     client.goto("https://e-nfs.com.br/e-nfs_novalima/servlet/hlogin").await.map_err(|e| {

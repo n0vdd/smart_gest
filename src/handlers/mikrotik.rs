@@ -4,10 +4,10 @@ use axum_extra::extract::Form;
 use serde::{Deserialize, Serialize};
 use time::PrimitiveDateTime;
 use tracing::{debug, error};
-use std::{io::{Read, Write}, net::{Ipv4Addr, TcpStream},  str::FromStr, sync::Arc};
+use std::{net::Ipv4Addr,  str::FromStr, sync::Arc};
 use sqlx::{prelude::FromRow, query, query_as, PgPool};
 
-use crate::handlers::{clients::{self, Cliente}, planos::Plano};
+use crate::handlers::{clients::Cliente, planos::Plano};
 
 pub async fn show_mikrotik_form() -> Html<String> {
     let template = MikrotikFormTemplate;
@@ -88,14 +88,13 @@ pub async fn register_mikrotik(
 
     //how do i make this check at compile time?
     query!(
-        "INSERT INTO mikrotik (nome, ip, secret, max_clientes, ssh_login, ssh_password)
-        VALUES ($1, $2, $3, $4, $5, $6)",
+        "INSERT INTO mikrotik (nome, ip, secret, max_clientes)
+        VALUES ($1, $2, $3, $4)",
         mikrotik.nome,
         mikrotik.ip.to_string(),
         mikrotik.secret,
-        mikrotik.max_clientes,
-        mikrotik.login,
-        mikrotik.senha)
+        mikrotik.max_clientes
+    )
     .execute(&*pool)
     .await
     .map_err(|e| -> _ {
@@ -166,13 +165,11 @@ pub async fn update_mikrotik(
     }
 
     query!(
-        "UPDATE mikrotik SET nome = $1, ip = $2, secret = $3, max_clientes = $4, ssh_login = $5, ssh_password = $6 WHERE id = $7",
+        "UPDATE mikrotik SET nome = $1, ip = $2, secret = $3, max_clientes = $4 WHERE id = $5",
         mikrotik.nome,
         mikrotik.ip,
         mikrotik.secret,
         mikrotik.max_clientes,
-        mikrotik.ssh_login,
-        mikrotik.ssh_password,
         mikrotik.id
     ).execute(&*pool)
     .await.map_err(|e| -> _ {
@@ -196,11 +193,9 @@ pub struct Mikrotik {
     pub ip: String,
     pub secret: String,
     pub max_clientes: Option<i32>, 
-    pub ssh_login: Option<String>,
     //could store this hashed?
     //i think no, its safer
     //it will be used for ssh and doing the fallback logic from radius
-    pub ssh_password: Option<String>,
     pub created_at: Option<PrimitiveDateTime>,
     pub updated_at: Option<PrimitiveDateTime>,
 }
@@ -215,9 +210,7 @@ pub struct MikrotikDto {
     pub nome: String,
     pub ip: Ipv4Addr,
     pub secret: String,
-    pub max_clientes: Option<i32>,
-    pub login: Option<String>,
-    pub senha: Option<String>,
+    pub max_clientes: Option<i32>
 }
 
 #[derive(Template)]

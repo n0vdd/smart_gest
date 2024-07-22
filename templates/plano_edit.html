@@ -37,15 +37,6 @@
         </div>
 
         <div class="mb-4">
-            <label for="tecnologia" class="block text-gray-700 text-sm font-bold mb-2">Tecnologia:</label>
-            {% if let Some(tecnologia) = plano.tecnologia %}
-                <input type="text" id="tecnologia" name="tecnologia" value="{{ tecnologia }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-            {% else %}
-                <input type="text" id="tecnologia" name="tecnologia" value="" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-            {% endif %}
-        </div>
-
-        <div class="mb-4">
             <label for="contrato_template_id" class="block text-gray-700 text-sm font-bold mb-2">Contrato Template:</label>
             <select id="contrato_template_id" name="contrato_template_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                 {% for contrato in contracts %}

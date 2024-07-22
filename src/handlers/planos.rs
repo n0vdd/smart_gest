@@ -23,6 +23,16 @@ struct PlanoEditFormTemplate {
     contracts: Vec<ContratoTemplate>,
 }
 
+pub async fn find_plano_by_cliente(pool:&PgPool,cliente_id: i32) -> Result<Plano,sqlx::Error> {
+    query_as!(
+        Plano,
+        "SELECT planos.* FROM planos INNER JOIN clientes ON planos.id = clientes.plano_id WHERE clientes.id = $1",
+        cliente_id
+    )
+    .fetch_one(pool)
+    .await
+}
+
 pub async fn delete_plano(Extension(pool): Extension<Arc<PgPool>>,
     Path(id): Path<i32>)
     -> impl IntoResponse {
@@ -66,13 +76,12 @@ pub async fn update_plano(
     Form(plano): Form<PlanoDto>,
 ) -> impl IntoResponse  {
     query!(
-        "UPDATE planos SET nome = $1, valor = $2, velocidade_up = $3, velocidade_down = $4, descricao = $5, tecnologia = $6, contrato_template_id = $7 WHERE id = $8",
+        "UPDATE planos SET nome = $1, valor = $2, velocidade_up = $3, velocidade_down = $4, descricao = $5, contrato_template_id = $6 WHERE id = $7",
         plano.nome,
         plano.valor,
         plano.velocidade_up,
         plano.velocidade_down,
         plano.descricao,
-        plano.tecnologia,
         plano.contrato_template_id,
         id
     )
@@ -145,14 +154,14 @@ pub async fn register_plano(
     Form(plano): Form<PlanoDto>,
 ) -> impl IntoResponse {
     query!(
-        "INSERT INTO planos (nome, valor, velocidade_up,velocidade_down, descricao, tecnologia,contrato_template_id)
-        VALUES ($1, $2, $3, $4, $5, $6,$7)",
+        "INSERT INTO planos (nome, valor, velocidade_up,velocidade_down, descricao, contrato_template_id)
+        VALUES ($1, $2, $3, $4, $5, $6)",
         plano.nome,
         plano.valor,
         plano.velocidade_up,
         plano.velocidade_down,
         plano.descricao,
-        plano.tecnologia,
+        //plano.tecnologia,
         plano.contrato_template_id) 
     .execute(&*pool)
     .await.map_err(|e| -> _ {
@@ -176,7 +185,6 @@ pub struct PlanoDto {
     pub velocidade_up: i32,
     pub velocidade_down: i32,
     pub descricao: Option<String>,
-    pub tecnologia: Option<String>,
     pub contrato_template_id: i32
 }
 
@@ -191,7 +199,6 @@ pub struct Plano {
     // TODO vincular o template de contrato de acordo com o plano
     //Tenho que representar os contratos na db
     //pub contrato: Option<String>,
-    pub tecnologia: Option<String>,
     pub contrato_template_id: i32,
     pub created_at : Option<PrimitiveDateTime>,
     pub updated_at : Option<PrimitiveDateTime>

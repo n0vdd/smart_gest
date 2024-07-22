@@ -14,7 +14,7 @@ use handlers::contrato::generate_contrato;
 use handlers::dici::{generate_dici, show_dici_list};
 use handlers::mikrotik::{delete_mikrotik, failover_radius,  register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
-use handlers::utils::{lookup_cep, validate_cpf_cnpj, validate_phone};
+use handlers::utils::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
 use once_cell::sync::Lazy;
 use services::webhooks::webhook_handler;
 use tokio::net::TcpListener;
@@ -119,7 +119,8 @@ async fn main() {
         .route("/contrato/:cliente_id", get(generate_contrato))
         .route("/cep", get(lookup_cep))
         .route("/telefone", get(validate_phone))
-        .route("/cpf_cnpj", get(validate_cpf_cnpj));
+        .route("/cpf_cnpj", get(validate_cpf_cnpj))
+        .route("/endereco",get(show_endereco));
 
     let mikrotik_routes = Router::new()
         .route("/", get(show_mikrotik_list))

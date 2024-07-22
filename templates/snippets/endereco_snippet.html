@@ -1,39 +1,48 @@
-    <div class="mb-4">
-        <label for="cep" class="block text-gray-700 text-sm font-bold mb-2">CEP:</label>
-        <input type="text" id="cep" name="cep" hx-get="/cliente/cep" hx-trigger="change" value="{{ cep }}" hx-target="#address-fields" hx-swap="innerHTML" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+<fieldset id="address-fields">
+<div class="mb-4">
+    <label for="cep" class="block text-gray-700 text-sm font-bold mb-2">CEP:</label>
+    <input type="text" id="cep" name="cep" hx-get="/cliente/cep" hx-trigger="change" value="{{ cep }}" hx-target="#address-fields" hx-swap="innerHTML" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+</div>
+
+<div class="mb-4">
+    <label for="rua" class="block text-gray-700 text-sm font-bold mb-2">Rua:</label>
+    <input type="text" id="rua" name="rua" value="{{ rua }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+</div>
+
+<div class="mb-4">
+    <label for="numero" class="block text-gray-700 text-sm font-bold mb-2">Número:</label>
+    <input type="text" id="numero" name="numero" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+</div>
+
+<div class="mb-4">
+    <label for="bairro" class="block text-gray-700 text-sm font-bold mb-2">Bairro:</label>
+    <input type="text" id="bairro" name="bairro" value="{{ bairro }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+</div>
+
+<div class="mb-4">
+    <label for="complemento" class="block text-gray-700 text-sm font-bold mb-2">Complemento:</label>
+    <input type="text" id="complemento" name="complemento" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+</div>
+
+<div class="mb-4">
+    <label for="cidade" class="block text-gray-700 text-sm font-bold mb-2">Cidade:</label>
+    <input type="text" id="cidade" name="cidade" value="{{ cidade }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+</div>
+
+<div class="mb-4">
+    <label for="estado" class="block text-gray-700 text-sm font-bold mb-2">Estado:</label>
+    <input type="text" id="estado" name="estado" value="{{ estado }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+</div>
+
+<div class="mb-4" style="display: none;">
+    <label for="ibge" class="block text-gray-700 text-sm font-bold mb-2">IBGE:</label>
+    <input type="text" id="ibge" name="ibge" value="{{ ibge }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+</div>
+
+<!--save button-->
+    <div class="flex items-center justify-between">
+        <input type="submit" onclick=closeEnderecoPane() class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
     </div>
 
-    <div class="mb-4">
-        <label for="rua" class="block text-gray-700 text-sm font-bold mb-2">Rua:</label>
-        <input type="text" id="rua" name="rua" value="{{ rua }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-    </div>
 
-    <div class="mb-4">
-        <label for="numero" class="block text-gray-700 text-sm font-bold mb-2">Número:</label>
-        <input type="text" id="numero" name="numero" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-    </div>
-
-    <div class="mb-4">
-        <label for="bairro" class="block text-gray-700 text-sm font-bold mb-2">Bairro:</label>
-        <input type="text" id="bairro" name="bairro" value="{{ bairro }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-    </div>
-
-    <div class="mb-4">
-        <label for="complemento" class="block text-gray-700 text-sm font-bold mb-2">Complemento:</label>
-        <input type="text" id="complemento" name="complemento" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-    </div>
-
-    <div class="mb-4">
-        <label for="cidade" class="block text-gray-700 text-sm font-bold mb-2">Cidade:</label>
-        <input type="text" id="cidade" name="cidade" value="{{ cidade }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-    </div>
-
-    <div class="mb-4">
-        <label for="estado" class="block text-gray-700 text-sm font-bold mb-2">Estado:</label>
-        <input type="text" id="estado" name="estado" value="{{ estado }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-    </div>
-
-    <div class="mb-4" style="display: none;">
-        <label for="ibge" class="block text-gray-700 text-sm font-bold mb-2">IBGE:</label>
-        <input type="text" id="ibge" name="ibge" value="{{ ibge }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-    </div>
+</fieldset>

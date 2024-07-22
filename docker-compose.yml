@@ -1,23 +1,23 @@
 version: '3.8'
 
 services:
-  freeradius:
-    image: freeradius/freeradius-server:latest
-    container_name: freeradius
-    ports:
-      - "1812:1812/udp"
-      - "1813:1813/udp"
-    volumes:
-      - "./configs/radius/users:/etc/raddb/users"
-      - "./configs/radius/clients.conf:/etc/raddb/clients.conf"
-    environment:
-      - DB_HOST=mysql
-      - RAD_DEBUG=yes
-    depends_on:
-      - mysql
-    restart: always
-    networks:
-      - smartcom
+#  freeradius:
+#    image: freeradius/freeradius-server:latest
+#    container_name: freeradius
+#    ports:
+#      - "1812:1812/udp"
+#      - "1813:1813/udp"
+#    volumes:
+#      - "./configs/radius/users:/etc/raddb/users"
+#      - "./configs/radius/clients.conf:/etc/raddb/clients.conf"
+#    environment:
+#      - DB_HOST=mysql
+#      - RAD_DEBUG=yes
+#    depends_on:
+#      - mysql
+#    restart: always
+#    networks:
+#      - smartcom
 
   mysql:
     image: mysql
@@ -64,7 +64,7 @@ services:
     ports:
       - "2222:22"
       - "23:23"
-      - "80:80"
+      - "81:80"
       - "5900:5900"
       - "8728:8728"
       - "8729:8729"

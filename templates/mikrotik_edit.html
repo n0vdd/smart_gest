@@ -27,16 +27,6 @@
             <input type="number" id="max_clientes" name="max_clientes" value="{% if let Some(text) = mikrotik.max_clientes %}{{ text }}{% endif %}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
         </div>
 
-        <div class="mb-4">
-            <label for="ssh_login" class="block text-gray-700 text-sm font-bold mb-2">SSH Login:</label>
-            <input type="text" id="ssh_login" name="ssh_login" value="{% if let Some(text) = mikrotik.ssh_login %}{{ text }}{% endif %}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-        </div>
-
-        <div class="mb-4">
-            <label for="ssh_password" class="block text-gray-700 text-sm font-bold mb-2">SSH Password:</label>
-            <input type="password" id="ssh_password" name="ssh_password" value="{% if let Some(text) = mikrotik.ssh_password %}{{ text }}{% endif %}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-        </div>
-
         <div class="flex items-center justify-between">
             <input type="submit" value="Update" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
         </div>

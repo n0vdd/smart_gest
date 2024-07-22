@@ -93,6 +93,22 @@ pub struct TelefoneTemplate {
     pub telefone: String,
 }
 
+pub async fn show_endereco() -> Html<String> {
+    let template = EnderecoSnippetTemplate {
+        cep: "".to_string(),
+        rua: "".to_string(),
+        bairro: "".to_string(),
+        cidade: "".to_string(),
+        estado: "".to_string(),
+        ibge: "".to_string(),
+    }.render().map_err(|e| -> _ {
+        error!("Erro ao renderizar endereco snippet: {:?}", e);
+        Html("Erro ao renderizar endereco snippet".to_string())
+    }).expect("Erro ao renderizar endereco snippet");
+
+    Html(template)
+}
+
 //TODO validate phonumber(will deal with just brazilian numbers)
 pub async fn validate_phone(Query(phone): Query<TelefoneQuery>) -> Html<String> {
     debug!("Validating phonelfe number: {:?}", phone.telefone);

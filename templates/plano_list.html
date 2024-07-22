@@ -14,7 +14,6 @@
                 <th class="py-2">Valor</th>
                 <th class="py-2">Velocidade Download</th>
                 <th class="py-2">Velocidade Upload</th>
-                <th class="py-2">Tecnologia</th>
                 <th class="py-2">Actions</th>
             </tr>
         </thead>
@@ -27,13 +26,6 @@
                 <td class="border px-4 py-2">{{ plano.valor }}</td>
                 <td class="border px-4 py-2">{{ plano.velocidade_down }}</td>
                 <td class="border px-4 py-2">{{ plano.velocidade_up }}</td>
-                <td class="border px-4 py-2">
-                    {% if let Some(tecnologia) = plano.tecnologia %}
-                        {{ tecnologia }}
-                    {% else %}
-                        N/A
-                    {% endif %}
-                </td>
                 <td class="border px-4 py-2">
                     <a href="/plano/{{ plano.id }}" hx-get="/plano/{{ plano.id }}" class="text-blue-500 hover:text-blue-700">Edit</a>
                     <a href="/plano/{{ plano.id }}" hx-delete="/plano/{{ plano.id }}" class="text-red-500 hover:text-red-700">Delete</a>

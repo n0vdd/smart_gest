@@ -8,8 +8,9 @@ use sqlx::{query, query_as, PgPool};
 use time::{format_description::FormatItem, macros::format_description};
 use tracing::{debug, error};
 
-use crate::handlers::clients::{Cliente, ClienteDto};
+use crate::{handlers::clients::{Cliente, ClienteDto}, services::nfs::gera_nfs};
 
+const API_KEY: &str = "$aact_YTU5YTE0M2M2N2I4MTliNzk0YTI5N2U5MzdjNWZmNDQ6OjAwMDAwMDAwMDAwMDAwODUzNzI6OiRhYWNoXzAzYTI4MDhmLWI0NmItNDliNC1hNTIwLTRkNWUzZDBjNTQxZg==";
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -64,7 +65,10 @@ struct Payment {
    #[serde(rename = "confirmedDate")]
    confirmed_date: Option<String>,
    #[serde(rename = "billingType")]
-   billing_type: BillingType
+   billing_type: BillingType,
+   #[serde(rename = "netValue")]
+   net_value: f32,
+
 }
 
 #[derive(Serialize,Deserialize,Debug)]
@@ -100,6 +104,11 @@ pub async fn webhook_handler(
          match webhook_data.payment_data.billing_type {
             BillingType::Boleto | BillingType::Pix | BillingType::CreditCard => {
                //TODO gerar nota fiscal de servico
+               let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
+                  error!("Failed to fetch client: {:?}", e);
+                  e
+               }).expect("Erro ao buscar cliente");
+               gera_nfs(cliente,webhook_data.payment_data.net_value).await;
             },
             _ => {
                //TODO mandar algum aviso e logar, nao deveria nem chegar nesse flow
@@ -178,7 +187,7 @@ pub async fn add_cliente_to_asaas(cliente:&ClienteDto) {
    
    let url = format!("https://sandbox.asaas.com/api/v3/customers/");
 
-   client.get(&url).header("access_token","sandbox")
+   client.get(&url).header("access_token",API_KEY)
       .send().await.expect("Erro ao enviar pedido para recuperar clientes")
       .json::<CustomerList>().await.expect("Erro ao receber clientes")
       .data.iter().find(|name| name.name == cliente.nome).map(|name| {
@@ -194,7 +203,7 @@ pub async fn add_cliente_to_asaas(cliente:&ClienteDto) {
    };
 
 
-   client.post(&url).header("access_token","sandbox")
+   client.post(&url).header("access_token",API_KEY)
       .json(&post_cliente).send().await
       .expect("Erro ao enviar pedido para adicionar cliente");
 }
@@ -227,7 +236,7 @@ async fn find_api_cliente(id:&str,pool: &PgPool) -> Result<Cliente,anyhow::Error
    //get the cpfCnpj from the response and use it to find the cliente in the db
    let client = reqwest::Client::new()
       .get(format!("https://sandbox.asaas.com/api/v3/customers/{}",id))
-      .header("access_token","sandbox")
+      .header("access_token",API_KEY)
       .send()
       .await.map_err(|e| {
          error!("Failed to fetch client: {:?}", e);

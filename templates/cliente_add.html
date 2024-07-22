@@ -47,51 +47,6 @@
             </div> 
         </div>
 
-        <fieldset class="mb-4">
-            <div id="address-fields">
-                <div class="mb-4">
-                    <label for="cep" class="block text-gray-700 text-sm font-bold mb-2">CEP:</label>
-                    <input type="text" id="cep" name="cep" hx-get="/cliente/cep" hx-trigger="change" hx-target="#address-fields" hx-swap="innerHTML" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                </div>
-
-                <div class="mb-4">
-                    <label for="rua" class="block text-gray-700 text-sm font-bold mb-2">Rua:</label>
-                    <input type="text" id="rua" name="rua" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                </div>
-
-                <div class="mb-4">
-                    <label for="numero" class="block text-gray-700 text-sm font-bold mb-2">Número:</label>
-                    <input type="text" id="numero" name="numero" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                </div>
-
-                <div class="mb-4">
-                    <label for="bairro" class="block text-gray-700 text-sm font-bold mb-2">Bairro:</label>
-                    <input type="text" id="bairro" name="bairro" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                </div>
-
-                <div class="mb-4">
-                    <label for="complemento" class="block text-gray-700 text-sm font-bold mb-2">Complemento:</label>
-                    <input type="text" id="complemento" name="complemento" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                </div>
-
-                <div class="mb-4">
-                    <label for="cidade" class="block text-gray-700 text-sm font-bold mb-2">Cidade:</label>
-                    <input type="text" id="cidade" name="cidade" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                </div>
-
-                <div class="mb-4">
-                    <label for="estado" class="block text-gray-700 text-sm font-bold mb-2">Estado:</label>
-                    <input type="text" id="estado" name="estado" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                </div>
-
-                    <!-- make this be hidden,just need to pass the value to the server-->
-                <div class="mb-4"  style="display: none;">
-                    <label for="ibge" class="block text-gray-700 text-sm font-bold mb-2 hidden">IBGE:</label>
-                    <input type="text" id="ibge" name="ibge" class="hidden shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                </div>
-            </div>
-        </fieldset>
-
         <div class="mb-4">
             <label for="login" class="block text-gray-700 text-sm font-bold mb-2">Login:</label>
             <input type="text" id="login" name="login" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
@@ -122,10 +77,48 @@
 
         <div class="flex items-center justify-between">
             <input type="submit" value="Register" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+            <button type="button" id="add-endereco-btn" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                hx-get="/cliente/endereco"
+                hx-target="#side-window"
+                hx-swap="innerHTML"
+                >Add Endereço</button>
         </div>
+
+        <!-- Hidden fields for address data -->
+        <input type="hidden" id="main-cep" name="cep">
+        <input type="hidden" id="main-rua" name="rua">
+        <input type="hidden" id="main-numero" name="numero">
+        <input type="hidden" id="main-bairro" name="bairro">
+        <input type="hidden" id="main-complemento" name="complemento">
+        <input type="hidden" id="main-cidade" name="cidade">
+        <input type="hidden" id="main-estado" name="estado">
+        <input type="hidden" id="main-ibge" name="ibge">
     </form>
 
     <!-- TODO create a place for error display relevant to the field at hand-->
     <div id="response"></div>
+
+    <!-- Side Window -->
+    <div id="side-window" class="fixed right-0 top-0 h-full w-1/3 bg-white shadow-lg p-6 transform translate-x-full transition-transform duration-300 ease-in-out"></div>
+
+    <script>
+        document.getElementById('add-endereco-btn').addEventListener('click', function() {
+            document.getElementById('side-window').style.transform = 'translateX(0)';
+        });
+    
+        function closeEnderecoPane() {
+            document.getElementById('main-cep').value = document.getElementById('cep').value;
+            document.getElementById('main-rua').value = document.getElementById('rua').value;
+            document.getElementById('main-numero').value = document.getElementById('numero').value;
+            document.getElementById('main-bairro').value = document.getElementById('bairro').value;
+            document.getElementById('main-complemento').value = document.getElementById('complemento').value;
+            document.getElementById('main-cidade').value = document.getElementById('cidade').value;
+            document.getElementById('main-estado').value = document.getElementById('estado').value;
+            document.getElementById('main-ibge').value = document.getElementById('ibge').value;
+
+            document.getElementById('side-window').style.transform = 'translateX(100%)';
+        }
+    </script>
+
 </div>
 {% endblock %}
