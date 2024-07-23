@@ -188,8 +188,22 @@ pub async fn add_cliente_to_asaas(cliente:&ClienteDto) {
    let url = format!("https://sandbox.asaas.com/api/v3/customers/");
 
    client.get(&url).header("access_token",API_KEY)
-      .send().await.expect("Erro ao enviar pedido para recuperar clientes")
-      .json::<CustomerList>().await.expect("Erro ao receber clientes")
+      .header("accept", "application/json")
+      .header("user-agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+      .send().await.map(|response| {
+         debug!("Cliente Response: {:?}", response);
+         response
+      }).map_err(|e | {
+         error!("Failed to fetch clients: {:?}", e);
+         e
+      }).expect("Erro ao enviar pedido para recuperar clientes")
+      .json::<CustomerList>().await.map(|response| {
+         debug!("Clientes em json: {:?}", response);
+         response
+      }).map_err(|e| {
+         error!("Failed to parse clients: {:?}", e);
+         e
+      }).expect("Erro ao receber clientes")
       .data.iter().find(|name| name.name == cliente.nome).map(|name| {
          debug!("Cliente ja existe: {:?}",name);
          return
@@ -204,8 +218,13 @@ pub async fn add_cliente_to_asaas(cliente:&ClienteDto) {
 
 
    client.post(&url).header("access_token",API_KEY)
-      .json(&post_cliente).send().await
-      .expect("Erro ao enviar pedido para adicionar cliente");
+      .header("accept", "application/json")
+      .header("content-type", "application/json")
+      .header("user-agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+      .json(&post_cliente).send().await.map_err(|e| {
+         error!("Failed to post client: {:?}", e);
+         e
+      }).expect("Erro ao enviar pedido para adicionar cliente");
 }
 
 async fn check_if_payment_exists(id: &str, table: &str, pool: &PgPool) -> bool {

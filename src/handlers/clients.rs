@@ -338,8 +338,7 @@ pub async fn register_cliente(
                     .map_err(|e| -> _ {
                         error!("Failed to parse cpf/cnpj: {:?}", e);
                         Html("<p>Failed to parse cpf/cnpj</p>".to_string())
-                    })
-                    .expect("Failed to parse cpf/cnpj")
+                    }).expect("Failed to parse cpf/cnpj")
                     .to_string();
             } else {
                 return Html("<p>Invalid CNPJ</p>".to_string()).into_response();
