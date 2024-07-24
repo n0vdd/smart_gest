@@ -50,17 +50,18 @@ pub async fn failover_mikrotik_script(Path(id):Path<i32>) -> impl IntoResponse {
     }).expect("Failed to get local ip");
 
     //This should keep it all formmated
+    //TODO this should use https for secure connection
     script.push_str(format!(r#"/system scheduler add interval=45m name=ler_pppoe on-event=":execute script=ler_pppoe;
-                               /system script add name=ler_pppoe source="\#===============================\r\
-                               \n/tool fetch url=\"https://{}/mikrotik/:{}/faiolver\ dst-path=mkt_pppoe.rsc;\r\
-                               \n:set done \"true\";\r\
-                               \n\r
-                               \n:if ( [/file find name=mkt_pppoe.rsc] != \"\" ) do={{\r\
-                               \n   :log warning \"Importando PPPoE\";\r\
-                               \n   /import mkt_pppoe.rsc;\r\
-                               \n   /file remove mkt_pppoe.rsc;\r\
-                               \n\}}\r\
-                               \n""#,ip.to_string(),id).as_str());
+global done "";
+/system script add name=ler_pppoe source=" #===============================\r
+/tool fetch url="http://{}:8080/mikrotik/{}/faiolver" dst-path=mkt_pppoe.rsc;
+:set done "true";
+:if ( [/file find name=mkt_pppoe.rsc] != "" ) do={{
+:log warning "Importando PPPoE";
+/import mkt_pppoe.rsc;
+/file remove mkt_pppoe.rsc;
+}}
+"#,ip.to_string(),id).as_str());
     
     debug!("mikrotik failover script:{}",script);
     script

@@ -1,11 +1,11 @@
 pub mod radius;
 
-use std::{env, path::Path};
+use std::env;
 use dotenv::dotenv;
 
-use log::error;
-use sqlx::{migrate::{Migrate, Migrator}, MySql, MySqlPool, PgPool, Pool, Postgres};
+use sqlx::{PgPool, Pool, Postgres};
 use thiserror::Error;
+use tracing::error;
 
 pub type Result<T> = std::result::Result<T, DbError>;
 
@@ -31,6 +31,7 @@ pub async fn create_radius_pg_pool() -> Result<Pool<Postgres>> {
     //get migrations
     //TODO check if this will overide the db on app restart
     //it should not
+    /* 
     let migrator = Migrator::new(Path::new("./radius/migrations")).await.map_err(|e| {
         error!("Failed to create migrator: {:?}", e);
         DbError::DatabaseError(sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, "Failed to create migrator")))
@@ -41,6 +42,7 @@ pub async fn create_radius_pg_pool() -> Result<Pool<Postgres>> {
         error!("Failed to run migrations: {:?}", e);
         DbError::DatabaseError(sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, "Failed to run migrations")))
     })?;
+    */
 
     Ok(pool)
 }

@@ -4,9 +4,10 @@ CREATE TABLE nas (
     shortname VARCHAR(32),
     type VARCHAR(30) DEFAULT 'other',
     ports INTEGER,
-    secret VARCHAR(60) DEFAULT 'secret' NOT NULL,
+    secret VARCHAR(60) NOT NULL DEFAULT 'secret',
     server VARCHAR(64),
     community VARCHAR(50),
-    description VARCHAR(200) DEFAULT 'RADIUS Client',
-    INDEX (nasname)
+    description VARCHAR(200) DEFAULT 'RADIUS Client'
 );
+
+CREATE INDEX idx_nasname ON nas(nasname);

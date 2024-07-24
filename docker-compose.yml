@@ -19,20 +19,20 @@ services:
 #    networks:
 #      - smartcom
 
-  mysql:
-    image: mysql
-    container_name: mysql
+  radius-db:
+    image: postgres:latest 
+    container_name: radius-db 
     ports:
-      - "3306:3306"
+      - "5434:5432"
     volumes:
-      - "./configs/mysql/master/data:/var/lib/mysql"
+      - radius-db-data:/var/lib/postgresql/data
+      #- "./configs/mysql/master/data:/var/lib/mysql"
       #- "./configs/mysql/master/conf.d:/etc/mysql/conf.d"
-      - "./configs/mysql/radius.sql:/docker-entrypoint-initdb.d/radius.sql"    
+      #- "./configs/mysql/radius.sql:/docker-entrypoint-initdb.d/radius.sql"    
     environment:
-      - MYSQL_ROOT_PASSWORD=radius
-      - MYSQL_USER=radius
-      - MYSQL_PASSWORD=radpass
-      - MYSQL_DATABASE=radius
+      POSTGRES_USER: radius
+      POSTGRES_PASSWORD: radpass
+      POSTGRES_DB: radius
     restart: always
     networks:
       - smartcom
@@ -73,6 +73,7 @@ services:
 
 volumes:
   app-db-data:
+  radius-db-data:
 
 networks:
   smartcom:

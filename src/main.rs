@@ -164,7 +164,7 @@ async fn main() {
         .layer(TraceLayer::new_for_http());
     //TODO add cors 
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
 
     let listener = TcpListener::bind(&addr).await
     .map_err(|e| -> _ {
