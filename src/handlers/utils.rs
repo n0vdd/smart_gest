@@ -12,6 +12,12 @@ use tracing::{debug, error};
 use crate::handlers::clients::EnderecoDto;
 
 use super::clients::TipoPessoa;
+
+//Recebe um cep do campo cep do formulario de endereco
+//Envia um pedido para a api do webmania que retorna os dados do cep(rua,bairro,estado,cidade etc)
+//Converte esses dados em um endereco
+//renderiza uma template com os dados do endereco
+//retorna um snippet do html de endereco com os dados prenchidos de acordo com a resposta da api
 pub async fn lookup_cep(
     Query(query): Query<CepQuery>,
 ) -> Result<Html<String>, Html<String>> {
@@ -20,7 +26,7 @@ pub async fn lookup_cep(
     let url_template = env::var("CEP_API_URL")
         .map_err(|e | -> _ {
             error!("Erro:{:?} ao pegar variavel do ambiente: CEP_API_URL", e);
-            Html("Erro ao pegar variavel do ambiente: CEP_API_URL".to_string())
+            return Html("Erro ao pegar variavel do ambiente: CEP_API_URL".to_string())
         })?;
 
     let url = url_template.replace("%s", &query.cep);
@@ -30,7 +36,7 @@ pub async fn lookup_cep(
     let response = client.get(&url).send().await
     .map_err(|e | -> _ {
         error!("Failed to send request: {:?}", e);
-        Html("Failed to send request".to_string())
+        return Html("Falha ao enviar pedido para a API".to_string())
     })?;
 
     debug!("Response: {:?}", response);
@@ -39,12 +45,12 @@ pub async fn lookup_cep(
         let response_body = response.text().await
         .map_err(|e | -> _ {
             error!("Failed to get response body: {:?}", e);
-            Html("Failed to get response body".to_string())
+            return Html("Falha para recuperar a resposta da API".to_string())
         })?;
         let webmania_response: WebmaniaResponse = serde_json::from_str(&response_body)
         .map_err(|e| -> _{
             error!("Failed to deserialize response: {:?}", e);
-            Html("Failed to deserialize response".to_string())
+            return Html("Falha ao realizar parse da resposta json da api".to_string())
         })?;
         let endereco = EnderecoDto {
             rua: webmania_response.endereco,
@@ -66,11 +72,9 @@ pub async fn lookup_cep(
             cidade: endereco.cidade,
             estado: endereco.estado,
             ibge: endereco.ibge,
-        };
-
-        let template = template.render().map_err(|e| -> _ {
+        }.render().map_err(|e| -> _ {
             error!("Failed to render endereco snippet: {:?}", e);
-            Html("Failed to render endereco snippet".to_string())
+            return Html("Falha ao renderizar snippet do endereco com os dados preenchidos".to_string())
         })?;
         Ok(Html(template))
     } else {
@@ -93,6 +97,7 @@ pub struct TelefoneTemplate {
     pub telefone: String,
 }
 
+//Mosta o snippet do endereco sem os dados
 pub async fn show_endereco() -> Html<String> {
     let template = EnderecoSnippetTemplate {
         cep: "".to_string(),
@@ -109,18 +114,22 @@ pub async fn show_endereco() -> Html<String> {
     Html(template)
 }
 
-//TODO validate phonumber(will deal with just brazilian numbers)
+//Recebe um numero de telefone(assume que o mesmo vem do brasil), do campo telefone do cadastro de cliente
+//Valida se o numero de telefone seria um numero de telefone brasileiro valido
+//Caso o numero de telefone for valido, nao faz nada
+//caso o numero seja invalido retorna um aviso no html 
+//TODO creta better error displaying on the frontend
 pub async fn validate_phone(Query(phone): Query<TelefoneQuery>) -> Html<String> {
-    debug!("Validating phonelfe number: {:?}", phone.telefone);
+    debug!("Validating phone number: {:?}", phone.telefone);
     //TODO check if the phone number is valid
     let phone = phonenumber::parse(Some(BR), phone.telefone).map_err(
         |e| -> _ {
             error!("Failed to parse phone number: {:?}", e);
-            return Html("Failed to parse phone number".to_string())
+            return Html("Falha para validar o numero de telefone".to_string())
         }
     ).expect("Failed to parse phone number");
     if !phone.is_valid() {
-        Html("Invalid phone number".to_string())
+        Html("Numero de telefone invalido".to_string())
     } else {
         //TODO maybe there is a better way to do this
         Html("".to_string())
@@ -129,6 +138,10 @@ pub async fn validate_phone(Query(phone): Query<TelefoneQuery>) -> Html<String> 
 
 //TODO this will be called by htmx after the user inputs the cpf/cnpj
 //will use the tipo de pessoa for a check, if the user is a pf or pj
+//Gets the cpf_cnpj from the cpf_cnpj field on the cliente form
+//Gets the Tipo Pessoa from the tipo fiel on the cliente form aswell
+//Based on the Tipo Pessoa it validates against cpf(Pessoa Fisica) or cnpj(Pessoa juridica)
+//if it is a valid number it formats the data and return a html snippet with the formated cpf_cnpj on display,and the unformated one hidden on another elememt
 pub async fn validate_cpf_cnpj(
     Query(cpf_cnpj): Query<CpfCnpjQuery>,
 ) -> Html<String> {
@@ -138,7 +151,7 @@ pub async fn validate_cpf_cnpj(
             let formatted = cpf_cnpj.formatted_cpf_cnpj.parse::<Cpf>().map_err(|e| -> _
             {
                 error!("Failed to parse CPF: {:?}", e);
-                Html("Failed to parse CPF".to_string())
+                return Html("Failed to parse CPF".to_string())
             })
             .expect("Failed to parse CPF").to_string();
 
@@ -146,9 +159,9 @@ pub async fn validate_cpf_cnpj(
                 formatted_cpf_cnpj: formatted,
                 cpf_cnpj: cpf_cnpj.formatted_cpf_cnpj,
             }.render().map_err(|e| -> _ {
-                error!("Failed to render CPF/CNPJ snippet: {:?}", e);
-                Html("Failed to render CPF/CNPJ snippet".to_string())
-            }).expect("Failed to render CPF/CNPJ snippet");
+                error!("Failed to render CPF snippet: {:?}", e);
+                return Html("Failed to render CPF snippet".to_string())
+            }).expect("Failed to render CPF snippet");
 
             Html(template)
         },
@@ -156,7 +169,7 @@ pub async fn validate_cpf_cnpj(
             let formatted = cpf_cnpj.formatted_cpf_cnpj.parse::<Cnpj>().map_err(|e| -> _
             {
                 error!("Failed to parse CNPJ: {:?}", e);
-                Html("Failed to parse CNPJ".to_string())
+                return Html("Failed to parse CNPJ".to_string())
             })
             .expect("Failed to parse CNPJ").to_string();
 
@@ -164,9 +177,9 @@ pub async fn validate_cpf_cnpj(
                 formatted_cpf_cnpj: formatted,
                 cpf_cnpj: cpf_cnpj.formatted_cpf_cnpj,
             }.render().map_err(|e| -> _ {
-                error!("Failed to render CPF/CNPJ snippet: {:?}", e);
-                Html("Failed to render CPF/CNPJ snippet".to_string())
-            }).expect("Failed to render CPF/CNPJ snippet");
+                error!("Failed to render CNPJ snippet: {:?}", e);
+                return Html("Failed to render CNPJ snippet".to_string())
+            }).expect("Failed to render CNPJ snippet");
 
             Html(template)
         }

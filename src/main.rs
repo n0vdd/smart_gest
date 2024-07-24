@@ -12,7 +12,7 @@ use db::create_postgres_pool;
 use handlers::clients::{delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
 use handlers::contrato::generate_contrato;
 use handlers::dici::{generate_dici, show_dici_list};
-use handlers::mikrotik::{delete_mikrotik, failover_radius,  register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
+use handlers::mikrotik::{delete_mikrotik, failover_mikrotik_script, failover_radius_script, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
 use once_cell::sync::Lazy;
@@ -128,7 +128,10 @@ async fn main() {
         .route("/add", post(register_mikrotik))
         .route("/:id", put(update_mikrotik))
         .route("/:id", delete(delete_mikrotik))
-        .route("/radius/:id",get(failover_radius))
+        //TODO test this
+        .route("/radius/:id",get(failover_mikrotik_script))
+        //TODO test this
+        .route("/:id/faiolver", get(failover_radius_script))
         .route("/:id", get(show_mikrotik_edit_form));
 
     let planos_routes = Router::new()

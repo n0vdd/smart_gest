@@ -140,6 +140,9 @@ impl<'r> Decode<'r, Postgres> for TipoPessoa {
 
 // Handlers
 
+//Get all the clientes from the db
+//Render the template with the clientes
+//return the client list
 pub async fn show_cliente_list(
     Extension(pool): Extension<Arc<PgPool>>,
 ) -> Html<String> {
@@ -148,17 +151,15 @@ pub async fn show_cliente_list(
         .await
         .map_err(|e| -> _ {
             error!("Failed to fetch clients: {:?}", e);
-            Html("<p>Failed to fetch clients</p>".to_string())
-        })
-        .expect("Failed to fetch clients");
+            return Html("<p>Failed to fetch clients</p>".to_string())
+        }).expect("Failed to fetch clients");
 
     let template = ClienteListTemplate { clients }
         .render()
         .map_err(|e| -> _ {
             error!("Failed to render client list template: {:?}", e);
-            Html("<p>Failed to render client list template</p>".to_string())
-        })
-        .expect("Failed to render client list template");
+            return Html("<p>Failed to render client list template</p>".to_string())
+        }).expect("Failed to render client list template");
 
     Html(template)
 }
@@ -214,6 +215,9 @@ pub async fn show_cliente_edit_form(
 }
 */
 
+//Gets the id of the cliente from the delete button
+//Deletes the cliente from the db
+//Returns a redirect of the user to the client list
 pub async fn delete_cliente(
     Path(id): Path<i32>,
     Extension(pool): Extension<Arc<PgPool>>,
@@ -224,18 +228,20 @@ pub async fn delete_cliente(
         .await
         .map_err(|e| -> _ {
             error!("Failed to delete client: {:?}", e);
-            Html("<p>Failed to delete client</p>".to_string())
-        })
-        .expect("Failed to delete client");
+            return Html("<p>Failed to delete client</p>".to_string())
+        }).expect("Failed to delete client");
 
     Redirect::to("/cliente").into_response()
 }
 
+//TODO this is not used because i dont have the edit form
+//Gets the edited cliente from the form
+//Updates the cliente in the db
+//Returns a redirect of the user to the client list
 pub async fn update_cliente(
     Extension(pool): Extension<Arc<PgPool>>,
     Form(client): Form<Cliente>,
 ) -> impl IntoResponse {
-
 
     query!(
         "UPDATE clientes SET tipo = $1, nome = $2, email = $3, cpf_cnpj = $4, formatted_cpf_cnpj = $5,
@@ -266,13 +272,16 @@ pub async fn update_cliente(
     .await
     .map_err(|e| -> _ {
         error!("Failed to update client: {:?}", e);
-        Html("<p>Failed to update client</p>".to_string())
-    })
-    .expect("Failed to update client");
+        return Html("<p>Failed to update client</p>".to_string())
+    }).expect("Failed to update client");
 
     Redirect::to("/cliente").into_response()
 }
 
+//Gets all the mikrotik options from the db
+//Gets all the planos options from the db
+//Renders the cliente form with the mikrotik and planos options to associate the cliente to
+//Returns the form to the user
 pub async fn show_cliente_form(
     Extension(pool): Extension<Arc<PgPool>>,
 ) -> Html<String> {
@@ -282,18 +291,16 @@ pub async fn show_cliente_form(
         .await
         .map_err(|e| -> _ {
             debug!("Failed to fetch Mikrotik: {:?}", e);
-            Html("<p>Failed to fetch Mikrotik</p>".to_string())
-        })
-        .expect("error fetching mikrotik");
+            return Html("<p>Failed to fetch all Mikrotiks</p>".to_string())
+        }).expect("error fetching mikrotik");
 
     let plan_list = query_as!(Plano, "SELECT * FROM planos")
         .fetch_all(&*pool)
         .await
         .map_err(|e| -> _ {
             debug!("Failed to fetch Planos: {:?}", e);
-            Html("<p>Failed to fetch Planos</p>".to_string())
-        })
-        .expect("Failed to fetch Planos");
+            Html("<p>Failed to fetch all Planos</p>".to_string())
+        }).expect("Failed to fetch Planos");
 
     let template = ClienteFormTemplate {
         mikrotik_options: mikrotik_list,
@@ -301,51 +308,76 @@ pub async fn show_cliente_form(
     }.render()
     .map_err(|e| -> _ {
         error!("Failed to render cliente form template: {:?}", e);
-        Html("<p>Failed to render cliente form template</p>".to_string())
-    })
-    .expect("Failed to render cliente form template");
+        return Html("<p>Failed to render cliente form template</p>".to_string())
+    }).expect("Failed to render cliente form template");
 
     Html(template)
 }
 
+//Gets the client data from the form
+//Validates the cpf or cnpj(Based on the TipoPessoa selected on the form),pessoa fisica validates cpf and juridica validates cnpj
+//salva uma versao formatada e uma nao formatada do cpf/cnpj(Para uso em nota fiscal)
+//salva a cliente para o sistema de gestao financeira asaas(facilita para gerar a assinatura do cliente)
+
+//TODO possivel criar a assinatura do cliente ja neste momento, porem nao sei se ja deveria deixar isso automatizado
+//porem usando o plano do cliente consigo criar a assinatura do mesmo
+
+//retorna um redirect do usuario para a lista de clientes
+//this can be a source of errors on the cliente side pela falta de atencao
 //TODO deal with the validation of the cpf/cnpj on the frontend
 pub async fn register_cliente(
     Extension(pool): Extension<Arc<PgPool>>,
     Form(mut client): Form<ClienteDto>,
 ) -> impl IntoResponse {
-    // Validation for CPF/CNPJ
+
+    //Validate the cpf/cnpj based on the Tipo de Pessoa
+    //This is not really good,always forget to set the Tipo de Pessoa no formulario
+    //TODO maybe we can set the Tipo de Pessoa based on the length of the cpf/cnpj on the frontend
     match client.tipo {
         TipoPessoa::PessoaFisica => {
+            //Check the cpf
             if cpf::valid(&client.cpf_cnpj) {
+                //Parse the cpf and save the formatted one to the db together with an unformated_one
                 client.formatted_cpf_cnpj = client
                     .cpf_cnpj
                     .parse::<Cpf>()
                     .map_err(|e| -> _ {
                         error!("Failed to parse cpf/cnpj: {:?}", e);
-                        Html("<p>Failed to parse cpf/cnpj</p>".to_string())
+                        //I can return the Response to the fronted from the error itself
+                        //TODO this should appear bellow the cpf/cnpj field with the wrong data on it, not on another page
+                        return Html("<p>Falha ao formatar Cpf</p>".to_string())
                     })
                     .expect("Failed to parse cpf/cnpj")
                     .to_string();
             } else {
-                return Html("<p>Invalid CPF</p>".to_string()).into_response();
+                //TODO this should appear bellow the cpf/cnpj field with the wrong data on it, not on another page
+                return Html("<p>CPF Invalido</p>".to_string()).into_response();
             }
         },
+
         TipoPessoa::PessoaJuridica => {
+            //Check the cnpj(it looks kinda of buggy)
+            //TODO make better checks for this shit
+            //?maybe i could unit test?idk
             if cnpj::valid(&client.cpf_cnpj) {
                 client.formatted_cpf_cnpj = client
                     .cpf_cnpj
                     .parse::<Cnpj>()
                     .map_err(|e| -> _ {
                         error!("Failed to parse cpf/cnpj: {:?}", e);
-                        Html("<p>Failed to parse cpf/cnpj</p>".to_string())
+                        //TODO this should appear bellow the cpf/cnpj field with the wrong data on it, not on another page
+                        return Html("<p>Erro ao formatar o Cnpj</p>".to_string())
                     }).expect("Failed to parse cpf/cnpj")
                     .to_string();
             } else {
-                return Html("<p>Invalid CNPJ</p>".to_string()).into_response();
+                //TODO this should appear bellow the cpf/cnpj field with the wrong data on it, not on another page
+                return Html("<p>CNPJ Invalido</p>".to_string()).into_response();
             }
         }
     }
 
+    //Apos formatar o cpf/cnpj salva o cliente para a db(endereco faz parte do mesmo), poderia separar,
+    //mas nao vejo necessidade nesse caso,caso da vedajato sera necessario
     query!(
         "INSERT INTO clientes (
             tipo, nome, email, cpf_cnpj, formatted_cpf_cnpj, telefone, login, senha, 
@@ -356,10 +388,15 @@ pub async fn register_cliente(
         client.tipo.as_bool(),
         client.nome,
         client.email,
+        //cpf_cnpj nao formatado sera usado para nota_fiscal
         client.cpf_cnpj,
+        //cpf_cnpj formatado sera usado para exibir na pagina e para o contrato
         client.formatted_cpf_cnpj,
         client.telefone,
+        //login e senha usado para controle de acesso pelo radius
         client.login,
+        //TODO senhar ser salva em plaintext nao e legal
+        //Nao sei se teria como salvala de outra forma
         client.senha,
         client.mikrotik_id,
         client.plano_id,
@@ -376,12 +413,10 @@ pub async fn register_cliente(
     .await
     .map_err(|e| {
         error!("Failed to insert client: {:?}", e);
-        anyhow::anyhow!("Failed to insert client {e}")
-    })
-    .expect("Failed to insert client");
+        return Html("Failed to save the client")
+    }).expect("Failed to insert client");
 
-    //TODO save clientes to asaas as well
-    add_cliente_to_asaas(&client).await;
+    add_cliente_to_asaas(&client).await.expect("Failed to add client to asaas");
 
     Redirect::to("/cliente").into_response()
 }
@@ -428,19 +463,24 @@ impl fmt::Display for Endereco {
     }
 }
 
+//param: date, a date to be compared on the db with the time the cliente was created
+//Selects the tipo of the cliente(Pessoa Fisica ou Juridica) for all the clientes created before the given date
+//Returns a List with all the tipos of the clientes created before the given date
 pub async fn fetch_tipo_clientes_before_date(
     pool: &PgPool,
     date: PrimitiveDateTime
-) -> Vec<TipoPessoa> {
-    query!("SELECT tipo FROM clientes WHERE created_at < $1", date)
+) -> Result<Vec<TipoPessoa>,anyhow::Error> {
+    //Get the tipo of the cliente created before a given data
+    let tipos = query!("SELECT tipo FROM clientes WHERE created_at < $1", date)
         .fetch_all(&*pool)
-        .await
-        .map_err(|e| -> _ {
+        .await.map_err(|e| -> _ {
             error!("Failed to fetch clients: {:?}", e);
-            e
-        })
-        .expect("Failed to fetch clients")
+            anyhow::anyhow!("Falha ao achar clientes na db antes da data {date}")
+        })?
+        //Convert the bool from the record to TipoPessoa
         .iter().map(|row| {
             TipoPessoa::from_bool(row.tipo)
-        }).collect()
+        }).collect();
+
+    Ok(tipos)
 }

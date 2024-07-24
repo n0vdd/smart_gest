@@ -10,12 +10,71 @@ use sqlx::{prelude::FromRow, query, query_as, PgPool};
 use crate::handlers::{clients::Cliente, planos::Plano};
 
 pub async fn show_mikrotik_form() -> Html<String> {
-    let template = MikrotikFormTemplate;
-    Html(template.render().expect("Failed to render Mikrotik form template"))
+    let template = MikrotikFormTemplate.render().map_err(|e| {
+        error!("Failed to render Mikrotik form template: {:?}", e);
+        e
+    }).expect("Failed to render Mikrotik form template");
+
+    Html(template)
 }
 
-//Create the script with html template?
-pub async fn failover_radius(Path(mikrotik_id):Path<i32>,Extension(pool):Extension<Arc<PgPool>>) -> impl IntoResponse {
+//Create the script for pasting onto mikrotik with html template?
+//TODO return the complete script for mikrotik faiolver
+//Based on this:
+/*/system scheduler add interval=45m name=ler_pppoe on-event=":execute script=ler_pppoe;"
+/system script add name=ler_pppoe source="#===============================\r\
+    \n:global RADIUSIP \"This.Ip\"; \r\
+
+    Maybe i dont need this login and password
+    \n:global USER \"User_e76f08163bba500761c211cc466c8c04\"; \r\
+    \n:global PASS \"Pass_aef8067ca4ceed0d38d94d147a21a3eb0f266225\"; \r\
+    \n:global done \"\";\r\
+
+    //Fetch the script from the controller server
+    //TODO redo the uris of the failover logic
+    \n/tool fetch user=\$USER password=\$PASS url=\"https://\$RADIUSIP/mikrotik/:id/failover\" dst-path=mkt_pppoe.rsc;\r\
+    \n:set done \"true\";\r\
+    \n\r\
+    \n:if ( [/file find name=mkt_pppoe.rsc] != \"\" ) do={\r\
+    \n   :log warning \"Importando PPPoE\";\r\
+    \n   /import mkt_pppoe.rsc;\r\
+    \n   /file remove mkt_pppoe.rsc;\r\
+    \n}\r\
+    \n" */
+//TODO return inside a html side pane or some shit, with a copy button
+pub async fn failover_mikrotik_script(Path(id):Path<i32>) -> impl IntoResponse {
+    let mut script = String::new();
+    let ip = local_ip_address::local_ip().map_err(|e| {
+        error!("Failed to get local ip: {:?}", e);
+        return Html("<p>Failed to get local broadcast ip</p>".to_string())
+    }).expect("Failed to get local ip");
+
+    //This should keep it all formmated
+    script.push_str(format!(r#"/system scheduler add interval=45m name=ler_pppoe on-event=":execute script=ler_pppoe;
+                               /system script add name=ler_pppoe source="\#===============================\r\
+                               \n/tool fetch url=\"https://{}/mikrotik/:{}/faiolver\ dst-path=mkt_pppoe.rsc;\r\
+                               \n:set done \"true\";\r\
+                               \n\r
+                               \n:if ( [/file find name=mkt_pppoe.rsc] != \"\" ) do={{\r\
+                               \n   :log warning \"Importando PPPoE\";\r\
+                               \n   /import mkt_pppoe.rsc;\r\
+                               \n   /file remove mkt_pppoe.rsc;\r\
+                               \n\}}\r\
+                               \n""#,ip.to_string(),id).as_str());
+    
+    debug!("mikrotik failover script:{}",script);
+    script
+}
+
+
+///Generate a script to be downloaded by mikrotik every 45 minutes,creating the .rsc that will delete the previous created faiolver data
+///and recreate it, creating the ppp/profiles and ppp/secrets(disabled by default), evereything with the smart_gest comment for easy of scripting
+///and so that everyone know that it was created by this system
+///param: mikrotik id to get the associated clientes
+///param: Db connection for the logic(getting all the planos,linking clientes to mikrotik)
+//TODO make this be run after every added cliente would be safer(every 45 minute aswell,because this migth not be doable)
+pub async fn failover_radius_script(Path(mikrotik_id):Path<i32>,Extension(pool):Extension<Arc<PgPool>>) -> impl IntoResponse {
+    //Get all the planos
     let planos = query_as!(Plano,"SELECT * FROM planos")
         .fetch_all(&*pool)
         .await.map_err(|e| -> _ {
@@ -23,6 +82,7 @@ pub async fn failover_radius(Path(mikrotik_id):Path<i32>,Extension(pool):Extensi
             return Html("<p>Failed to fetch Planos</p>".to_string())
         }).expect("Failed to fetch Planos");
 
+    //Get all the clientes for the given mikrotik
     let clientes = query_as!(Cliente,"SELECT * FROM clientes WHERE mikrotik_id = $1",mikrotik_id)
         .fetch_all(&*pool)
         .await.map_err(|e| -> _ {
@@ -31,16 +91,20 @@ pub async fn failover_radius(Path(mikrotik_id):Path<i32>,Extension(pool):Extensi
         }).expect("Failed to fetch Clientes");
 
     let mut commands = String::new();
-    //remove previous profiles
+    //remove previous added profiles
     commands.push_str(format!(r#":foreach profile in=[/ppp/profile/find where comment="smart_gest"] do={{/ppp/profile/remove $profile}}
     "#).as_str());
-    //remove previous clientes 
+    //remove previous added clientes 
     commands.push_str(format!(r#":foreach cliente in=[/ppp/secret/find where comment="smart_gest"] do={{/ppp/secret/remove $cliente}}
     "#).as_str());
 
     for plano in &planos {
         debug!("adicionando plano ao script: {:?}",plano);
-        //TODO criar planos sem ser com mbs, terei que alterar aqui
+        //TODO criar planos com kbs, terei que alterar aqui
+        //sera util para planos de bloqueio e afins(nao sei se seria necessario)
+        //?acho que o unico jeito viavel do radius bloquear os clientes?
+        //deveria ter como desativar eles, nao faz sentido deixar em um plano sem nada, se posso so nao deixar ele conectado
+
         //add profiles
         commands.push_str(format!(r#"/ppp/profile/add name="{}" rate-limit={}m/{}m only-one=yes comment="smart_gest"
         "#,
@@ -53,22 +117,32 @@ pub async fn failover_radius(Path(mikrotik_id):Path<i32>,Extension(pool):Extensi
             .map(|plano_name| { plano_name.nome.clone() })
             .expect("impossivel achar plano");
 
-        //add clients
-
-        //TODO escape mikrotik problem chars(can deal with the optional login and senha better and do this in the same part of the code)
-        commands.push_str(format!(r#"/ppp/secret/add name="{}" password="{}" profile="{}" service=pppoe comment="smart_gest" disabled=yes
-        "#,
-            cliente.login.as_ref().expect("impossivel encontrar login"),cliente.senha.as_ref().expect("impossivel achar senha"),plano_name).as_str());
+        //Get the login and senha, escape problematic characters and add the cliente to the mikrotik script
+        if let Some(login) = cliente.login.as_ref() {
+            // \$	Output $ character. Otherwise $ is used to link variable.
+            // \?	Output ? character. Otherwise ? is used to print "help" in console.
+            // \_	- space
+            //TODO escape mikrotik problem chars for login and senha
+            //We use \\ because the first escapes the second as a rust string
+            let login = login.replace("$","\\$").replace("?","\\?").replace(" ","\\_");
+            if let Some(senha) = cliente.senha.as_ref() {
+                let senha = senha.replace("$","\\$").replace("?","\\?").replace(" ","\\_");
+                commands.push_str(format!(r#"/ppp/secret/add name="{}" password="{}" profile="{}" service=pppoe comment="smart_gest" disabled=yes
+                "#,
+                    login,senha,plano_name).as_str());
+            }
+        }
     }
-
     commands
 }
 
 //TODO make the html appear to the user
-pub async fn delete_mikrotik(Extension(pool): Extension<Arc<PgPool>>) -> impl IntoResponse {
-    query!("DELETE FROM mikrotik")
+//Gets the mikrotik id(passed by the button) 
+//deletes the related mikrotik
+pub async fn delete_mikrotik(Path(mikrotik_id):Path<i32>,Extension(pool): Extension<Arc<PgPool>>) -> impl IntoResponse {
+    query!("DELETE FROM mikrotik where id = $1",mikrotik_id)
         .execute(&*pool)
-        .await.map_err(|e| -> _ {
+        .await.map_err(|e| {
             error!("Failed to delete Mikrotik: {:?}", e);
             return Html("<p>Failed to delete Mikrotik</p>".to_string())
         }).expect("Failed to delete Mikrotik");
@@ -76,17 +150,20 @@ pub async fn delete_mikrotik(Extension(pool): Extension<Arc<PgPool>>) -> impl In
     Redirect::to("/mikrotik")
 }
 
+//Creates a mikrotik instance 
+//Receives the form data
+//returns a redirect of the user to the mikrotik list
 pub async fn register_mikrotik(
     Extension(pool): Extension<Arc<PgPool>>,
     Form(mikrotik): Form<MikrotikDto>,
 ) -> impl IntoResponse {
+    //This shouold not be checked(for virtualized maybe it could be shit)
     if mikrotik.ip.is_loopback() || mikrotik.ip.is_unspecified() {
         return Html("<p>Invalid IP</p>".to_string()).into_response();
     }
 
     debug!("mikrotik:{:?}",mikrotik);
 
-    //how do i make this check at compile time?
     query!(
         "INSERT INTO mikrotik (nome, ip, secret, max_clientes)
         VALUES ($1, $2, $3, $4)",
@@ -99,67 +176,80 @@ pub async fn register_mikrotik(
     .await
     .map_err(|e| -> _ {
         debug!("Failed to insert Mikrotik: {:?}", e);
-        Html("<p>Failed to insert Mikrotik</p>".to_string())
+        return Html("<p>Failed to insert Mikrotik</p>".to_string())
     }).expect("Failed to insert Mikrotik");
 
     Redirect::to("/mikrotik").into_response()
 }
 
+
+//Populate and show a list with all created mikrotiks
 pub async fn show_mikrotik_list(
     Extension(pool): Extension<Arc<PgPool>>,
 ) -> Html<String> {
+    //Get all created mikrotiks
     let mikrotik_list  = query_as!(Mikrotik,"SELECT * FROM mikrotik")
         .fetch_all(&*pool)
         .await.map_err(|e| -> _ {
-            debug!("Failed to fetch Mikrotik: {:?}", e);
-            Html("<p>Failed to fetch Mikrotik</p>".to_string())
+            error!("Failed to fetch Mikrotik: {:?}", e);
+            return Html("<p>Failed to fetch Mikrotik</p>".to_string())
         }).expect("Failed to fetch Mikrotik");
 
+    //Populate the template with the mikrotik instances
     let template = MikrotikListTemplate {
         mikrotik_options: mikrotik_list,
-    };
-
-    let template = template.render().map_err(|e| -> _ {
+    }.render().map_err(|e| -> _ {
         error!("Failed to render Mikrotik list template: {:?}", e);
-        Html("<p>Failed to render Mikrotik list template</p>".to_string())
+        return Html("<p>Failed to render Mikrotik list template</p>".to_string())
     }).expect("Failed to render Mikrotik list template");
 
     Html(template)
 }
 
+//Show the edit form for a mikrotik instance
+//Uses the id to find it on the db and populate the edit form
 pub async fn show_mikrotik_edit_form(
     Path(id): Path<i32>,
     Extension(pool): Extension<Arc<PgPool>>,
 ) -> Html<String> {
+    //Find the edit instance on the db
     let mikrotik = query_as!(Mikrotik,"SELECT * FROM mikrotik WHERE id = $1",id)
         .fetch_one(&*pool)
         .await.map_err(|e| -> _ {
-            debug!("Failed to fetch Mikrotik for editing: {:?}", e);
-            Html("<p>Failed to fetch Mikrotik</p>".to_string())
+            error!("Failed to fetch Mikrotik for editing: {:?}", e);
+            //maybe change this to a Did not find the mikrotik instace for editing or some shit
+            return Html("<p>Failed to fetch Mikrotik</p>".to_string())
         }).expect("Failed to fetch Mikrotik");
 
+    //Populate the edit form template with the mikrotik data
     let template = MikrotikEditTemplate {
         mikrotik,
-    };
-
-    let template = template.render().map_err(|e| -> _ {
+    }.render().map_err(|e| -> _ {
         error!("Failed to render Mikrotik edit template: {:?}", e);
-        Html("<p>Failed to render Mikrotik edit template</p>".to_string())
+        return Html("<p>Failed to render Mikrotik edit template</p>".to_string())
     }).expect("Failed to render Mikrotik edit template");
 
     Html(template)
 }
 
+//Gets the form with the edited mikrotik data
+//saves the changes to the DB
+//Return an html with the error
+//TODO make better error messages on the frontend(modals and shit)
+//Or returns a redirect of the user to the list of mikrotiks, when it all goes well
 pub async fn update_mikrotik(
     Extension(pool): Extension<Arc<PgPool>>,
     Form(mikrotik): Form<Mikrotik>,
 ) -> impl IntoResponse {
+    //Need to deal with a correct ipv4
+    //TODO daqui uns anos deveria lidar com a possibilidade de ipv6?
     let ip = Ipv4Addr::from_str(&mikrotik.ip)
     .map_err(|e| -> _ {
         error!("Failed to parse IP: {:?}", e);
-        Html("<p>Failed to parse IP</p>".to_string())
+        return Html("<p>Failed to parse IP</p>".to_string())
     }).expect("Failed to parse IP");
 
+    //Doens not need this ip check, i think there is a case for accepting loopback ips
     if ip.is_loopback() || ip.is_unspecified() {
         return Html("<p>Invalid IP</p>".to_string()).into_response();
     }
@@ -174,7 +264,7 @@ pub async fn update_mikrotik(
     ).execute(&*pool)
     .await.map_err(|e| -> _ {
         error!("Failed to update Mikrotik: {:?}", e);
-        Html("<p>Failed to update Mikrotik</p>".to_string())
+        return Html("<p>Failed to update Mikrotik</p>".to_string())
     }).expect("Failed to update Mikrotik");
 
     Redirect::to("/mikrotik").into_response()
@@ -191,11 +281,9 @@ pub struct Mikrotik {
     pub id: i32,
     pub nome: String,
     pub ip: String,
+    //TODO maybe store this as a hash, have to think if its viable
     pub secret: String,
     pub max_clientes: Option<i32>, 
-    //could store this hashed?
-    //i think no, its safer
-    //it will be used for ssh and doing the fallback logic from radius
     pub created_at: Option<PrimitiveDateTime>,
     pub updated_at: Option<PrimitiveDateTime>,
 }

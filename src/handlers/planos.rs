@@ -23,32 +23,41 @@ struct PlanoEditFormTemplate {
     contracts: Vec<ContratoTemplate>,
 }
 
-pub async fn find_plano_by_cliente(pool:&PgPool,cliente_id: i32) -> Result<Plano,sqlx::Error> {
+
+//Recebe a id de um cliente
+//Utiliza a id do cliente para achar qual o plano associado aquele cliente
+//retorna o plano
+pub async fn find_plano_by_cliente(pool:&PgPool,cliente_id: i32) -> Result<Plano,anyhow::Error> {
     query_as!(
         Plano,
         "SELECT planos.* FROM planos INNER JOIN clientes ON planos.id = clientes.plano_id WHERE clientes.id = $1",
         cliente_id
     )
     .fetch_one(pool)
-    .await
+    .await.map_err(|e| {
+        error!("Failed to fetch plano: {:?}", e);
+        anyhow::anyhow!("Failed to fetch plano data related to the cliente {cliente_id} from db")
+    })
 }
 
+//Deleta o plano basead na id passada(pelo button de delete)
 pub async fn delete_plano(Extension(pool): Extension<Arc<PgPool>>,
     Path(id): Path<i32>)
     -> impl IntoResponse {
     query!(
         "DELETE FROM planos WHERE id = $1",
         id 
-    ).execute(&*pool).await.map_err(
-        |e| {
-            error!("Failed to delete plano: {:?}", e);
-            e
-        }
-    ).expect("Erro ao deletar plano");
+    ).execute(&*pool).await.map_err(|e| {
+        error!("Failed to delete plano: {:?}", e);
+        e
+    }).expect("Erro ao deletar plano");
 
     Redirect::to("/plano")
 }
 
+//Pega todos os planos criados na db
+//popula uma template com eles
+//retorna a listagem(template)
 pub async fn list_planos(Extension(pool): Extension<Arc<PgPool>>) -> Html<String> {
     let planos = query_as!(
         Plano,
@@ -61,19 +70,20 @@ pub async fn list_planos(Extension(pool): Extension<Arc<PgPool>>) -> Html<String
         e
     }).expect("Erro ao buscar planos");
     
-    let template = PlanosListTemplate { planos };
-    let html = template.render().map_err(|e| {
+    let template = PlanosListTemplate { planos }.render().map_err(|e| {
         error!("Failed to render planos list template: {:?}", e);
         e
     }).expect("Erro ao renderizar planos list template");
 
-    Html(html)
+    Html(template)
 }
 
+//Recebe os dados de edicao de um plano
+//Atualiza o plano na db
+//Retorna a listagem com todos os planos
 pub async fn update_plano(
     Extension(pool): Extension<Arc<PgPool>>,
-    Path(id): Path<i32>,
-    Form(plano): Form<PlanoDto>,
+    Form(plano): Form<Plano>,
 ) -> impl IntoResponse  {
     query!(
         "UPDATE planos SET nome = $1, valor = $2, velocidade_up = $3, velocidade_down = $4, descricao = $5, contrato_template_id = $6 WHERE id = $7",
@@ -83,7 +93,7 @@ pub async fn update_plano(
         plano.velocidade_down,
         plano.descricao,
         plano.contrato_template_id,
-        id
+        plano.id
     )
     .execute(&*pool)
     .await
@@ -95,6 +105,11 @@ pub async fn update_plano(
     Redirect::to("/plano")
 }
 
+//Recebe a id de um plano pelo button de editar
+//Busca o plano na db
+//Busca todas as templates de contrato na db(popular edit form tambem)
+//Popula uma template com os dados do plano
+//Exibe o formulario de exibicao populado para o usuario
 pub async fn show_plano_edit_form(
     Extension(pool): Extension<Arc<PgPool>>,
     Path(id): Path<i32>
@@ -108,47 +123,54 @@ pub async fn show_plano_edit_form(
     .await
     .map_err(|e| {
         error!("Failed to fetch plano: {:?}", e);
-        e
+        return Html("<p>Failed to fetch plano for editing</p>".to_string())
     }).expect("Erro ao buscar plano");
 
+    //Possivel selecionar qualquer uma das templates de contrato para ser usado pelo plano
+    //Elas sao usadas ao criar um contrato para o cliente
     let contracts = query_as!(ContratoTemplate, "SELECT * FROM contratos_templates")
         .fetch_all(&*pool)
         .await
         .map_err(|e| {
             error!("Failed to fetch contract templates: {:?}", e);
-            e
+            return Html("<p>Failed to fetch contract templates</p>".to_string())
         }).expect("Erro ao buscar contratos");
     
-    let template = PlanoEditFormTemplate { plano, contracts };
-    let html = template.render().map_err(|e| {
+    let template = PlanoEditFormTemplate { plano, contracts }.render().map_err(|e| {
         error!("Failed to render plano edit form template: {:?}", e);
-        e
+        return Html("<p>Failed to render plano edit form template</p>".to_string())
     }).expect("Erro ao renderizar plano edit form template");
 
-    Html(html)
+    Html(template)
 }
 
 
+//Acha todas as templates de contrato na db
+//Popula a template de criacao de planos com as opcoes de contrato
+//renderiza a template e a retorna para o usuario
 pub async fn show_planos_form(Extension(pool): Extension<Arc<PgPool>>) -> Html<String> {
+    //Usados para gerar o contrato do cliente posteriormente
     let contracts= query_as!(ContratoTemplate, "SELECT * FROM contratos_templates")
         .fetch_all(&*pool)
         .await.map_err(|e| -> _ {
             error!("Failed to fetch contract templates: {:?}", e);
-            Html("Failed to fetch contract templates".to_string())
+            return Html("<p>Failed to fetch contract templates</p>".to_string())
         }).expect("Failed to fetch contract templates");
 
     let template = PlanosFormTemplate {
         contracts,
-    };
-
-    let template = template.render().map_err(|e| -> _ {
+    }.render().map_err(|e| -> _ {
         error!("Failed to render planos form template: {:?}", e);
-        Html("Failed to render planos form template".to_string())
+        return Html("<p>Failed to render planos form template</p>".to_string())
     }).expect("Failed to render planos form template");
 
     Html(template)
 }
 
+
+//Recebe os dados de um plano
+//Salva o mesmo para a db
+//Retorna a listagem de planos
 pub async fn register_plano(
     Extension(pool): Extension<Arc<PgPool>>,
     Form(plano): Form<PlanoDto>,
@@ -166,7 +188,7 @@ pub async fn register_plano(
     .execute(&*pool)
     .await.map_err(|e| -> _ {
         error!("Failed to insert Plano: {:?}", e);
-        return Html("Failed to insert Plano".to_string());
+        return Html("<p>Failed to insert Plano</p>".to_string());
     }).expect("Failed to insert Plano");
 
     Redirect::to("/plano")
