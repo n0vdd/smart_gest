@@ -4,7 +4,7 @@ use std::{env, path::Path};
 use dotenv::dotenv;
 
 use log::error;
-use sqlx::{migrate::{Migrate, Migrator}, MySql, MySqlPool, Pool};
+use sqlx::{migrate::{Migrate, Migrator}, MySql, MySqlPool, PgPool, Pool, Postgres};
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, DbError>;
@@ -15,14 +15,14 @@ pub enum DbError {
     DatabaseError(#[from] sqlx::Error),
 }
 
-pub async fn create_mysql_pool() -> Result<Pool<MySql>> {
+pub async fn create_radius_pg_pool() -> Result<Pool<Postgres>> {
     dotenv().ok();
     let database_url = env::var("DATABASE_URL").map_err(|e| -> _ {
         error!("DATABASE_URL must be set: {:?}", e);
         DbError::DatabaseError(sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, "DATABASE_URL must be set"))) 
     }).expect("DATABASE_URL must be set");
 
-    let pool = MySqlPool::connect(&database_url).await
+    let pool = PgPool::connect(&database_url).await
         .map_err(|e| -> _ {
             error!("Failed to create pool: {:?}", e);
             DbError::DatabaseError(sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, "Failed to create pool")))

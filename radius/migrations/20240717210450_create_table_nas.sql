@@ -1,15 +1,12 @@
--- Add migration script here
-
 CREATE TABLE nas (
-    id int(10) NOT NULL auto_increment,
-    nasname varchar(128) NOT NULL,
-    shortname varchar(32),
-    type varchar(30) DEFAULT 'other',
-    ports int(5),
-    secret varchar(60) DEFAULT 'secret' NOT NULL,
-    server varchar(64),
-    community varchar(50),
-    description varchar(200) DEFAULT 'RADIUS Client',
-    PRIMARY KEY (id),
-    KEY nasname (nasname)
+    id SERIAL PRIMARY KEY,
+    nasname VARCHAR(128) NOT NULL,
+    shortname VARCHAR(32),
+    type VARCHAR(30) DEFAULT 'other',
+    ports INTEGER,
+    secret VARCHAR(60) DEFAULT 'secret' NOT NULL,
+    server VARCHAR(64),
+    community VARCHAR(50),
+    description VARCHAR(200) DEFAULT 'RADIUS Client',
+    INDEX (nasname)
 );

@@ -1,10 +1,7 @@
--- Add migration script here
-
 CREATE TABLE radpostauth (
-    id int(11) NOT NULL auto_increment,
-    username varchar(64) NOT NULL default '',
-    pass varchar(64) NOT NULL default '',
-    reply varchar(32) NOT NULL default '',
-    authdate timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY  (id)
-) ENGINE = INNODB;
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(64) NOT NULL DEFAULT '',
+    pass VARCHAR(64) NOT NULL DEFAULT '',
+    reply VARCHAR(32) NOT NULL DEFAULT '',
+    authdate TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

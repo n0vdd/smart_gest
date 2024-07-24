@@ -16,7 +16,7 @@ const DESCRICAO: &str = "Serviço de internet";
 
 
 use fantoccini::{Client, ClientBuilder, Locator};
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::handlers::clients::Cliente;
 
@@ -25,7 +25,7 @@ use crate::handlers::clients::Cliente;
 //TODO pegar os valores para o scraper usando f12
 pub async fn gera_nfs(cliente:Cliente,value:f32) {
 
-    let client = ClientBuilder::native().connect("http://localhost:4444").await.map_err(|e| {
+    let client = ClientBuilder::native().connect("http://localhost:9515").await.map_err(|e| {
         error!("failed to connect to WebDriver: {:?}", e);
         e
     }).expect("failed to connect to WebDriver");
@@ -38,7 +38,14 @@ pub async fn gera_nfs(cliente:Cliente,value:f32) {
     //? talvez tenha que refazer a estrutura de dados dos planos para incluir as coisas fiscais
     //ai pego tudo pelo cliente(plano esta relacionado ao cliente entao fica facil)
 
+
     login(&client).await;
+    debug!("logged in for gerar nfs");
+
+    client.wait().for_element(Locator::Css("td a[href='hwmemitenfse1_a24'] i.fa-pencil-square-o")).await.map_err(|e| {
+        error!("failed to find gera nfs element: {:?}", e);
+        e
+    }).expect("failed to find element");
 
     let button = client.find(Locator::Css("td a[href='hwmemitenfse1_a24'] i.fa-pencil-square-o")).await.expect("failed to find element");
     button.click().await.map_err(|e| {
@@ -57,6 +64,11 @@ pub async fn gera_nfs(cliente:Cliente,value:f32) {
 }
 
 async fn input_cliente(client: &Client,cpf_cnpj: &str) {
+    client.wait().for_element(Locator::Css("#vCTBCPFCNPJ")).await.map_err(|e| {
+        error!("failed to find cpf/cnpj input element: {:?}", e);
+        e
+    }).expect("failed to find input element");
+
     // Locate the input element by its ID and input a value
     client.find(Locator::Css("#vCTBCPFCNPJ"))
     .await.map_err(|e| {
@@ -111,6 +123,10 @@ async fn input_cliente(client: &Client,cpf_cnpj: &str) {
 }
 
 async fn dados_nfs(cliente:&Cliente,client: &Client,value:f32) {
+    client.wait().for_element(Locator::Css("#vCTBRAZSOC")).await.map_err(|e| {
+        error!("failed to find Razão Social input element: {:?}", e);
+        e
+    }).expect("failed to find Razão Social input element");
     // Locate the "Razão Social" input element by its ID
     let razao_social_element = client.find(Locator::Css("#vCTBRAZSOC"))
     .await.map_err(|e| {
@@ -134,6 +150,11 @@ async fn dados_nfs(cliente:&Cliente,client: &Client,value:f32) {
             e
         }).expect("failed to input Razão Social value");
     }
+
+    client.wait().for_element(Locator::Css("#vNOMLOG")).await.map_err(|e| {
+        error!("failed to find Razão Social input element: {:?}", e);
+        e
+    }).expect("failed to find Razão Social input element");
 
     // Seta o nome do logradouro
     client.find(Locator::Css("#vNOMLOG"))
@@ -225,6 +246,20 @@ async fn dados_nfs(cliente:&Cliente,client: &Client,value:f32) {
         e
     }).expect("failed to input value in valor servico");
 
+    client.wait().for_element(Locator::Css("#vIMGADDSRV")).await.map_err(|e| {
+        error!("failed to find add service button: {:?}", e);
+        e
+    }).expect("failed to find add service button");
+
+    client.find(Locator::Css("#vIMGADDSRV")).await.map_err(|e| {
+        error!("failed to find add service button: {:?}", e);
+        e
+    }).expect("failed to find add service button")
+    .click().await.map_err(|e| {
+        error!("failed to click add service button: {:?}", e);
+        e
+    }).expect("failed to click add service button");
+
     //Codigo CNAE sempre sera o mesmo
     client.find(Locator::Css("#vNBSCODIGO"))
     .await.map_err(|e| {
@@ -267,12 +302,12 @@ async fn login(client: &Client) {
         panic!("Failed to navigate to login page")
     }).expect("Failed to navigate to login page");
 
-    client.wait().for_element(Locator::XPath("//input[@placeholder='CPF/CNPJ do Prestador']")).await.map_err(|e| {
+    client.wait().for_element(Locator::Id("vUSULOGIN")).await.map_err(|e| {
         error!("failed to find cpf/cnpj login input: {:?}", e);
         e
     }).expect("failed to find login input");
 
-    client.find(Locator::XPath("//input[@placeholder='CPF/CNPJ do Prestador']")).await.map_err(|e| { 
+    client.find(Locator::Id("vUSULOGIN")).await.map_err(|e| { 
         error!("failed to find login input: {:?}", e);
         e
     }).expect("failed to find login input")
@@ -281,12 +316,12 @@ async fn login(client: &Client) {
         e
     }).expect("failed to enter CNPJ");
 
-    client.wait().for_element(Locator::XPath("//input[@placeholder='Senha']")).await.map_err(|e| {
+    client.wait().for_element(Locator::Id("vSENHA")).await.map_err(|e| {
         error!("failed to find password input: {:?}", e);
         e
     }).expect("failed to find password input");
 
-    client.find(Locator::XPath("//input[@placeholder='Senha']")).await.map_err(|e| {
+    client.find(Locator::Id("vSENHA")).await.map_err(|e| {
         error!("failed to find password input: {:?}", e);
         e
     }).expect("failed to find password input").send_keys(PASSWORD).await.map_err(|e| {
@@ -294,7 +329,7 @@ async fn login(client: &Client) {
         e
     }).expect("failed to enter password");
 
-    client.find(Locator::XPath("//form//button[@type='submit']")).await.map_err(|e| {
+    client.find(Locator::Id("BUTTON1")).await.map_err(|e| {
         error!("failed to find submit button: {:?}", e);
         e
     }).expect("failed to find submit button").click().await.map_err(|e| {

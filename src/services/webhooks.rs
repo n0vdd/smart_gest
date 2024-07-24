@@ -104,10 +104,12 @@ pub async fn webhook_handler(
          match webhook_data.payment_data.billing_type {
             BillingType::Boleto | BillingType::Pix | BillingType::CreditCard => {
                //TODO gerar nota fiscal de servico
+               debug!("Gerando nota fiscal de servico para cliente: {:?}", webhook_data.payment_data.customer);
                let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
                   error!("Failed to fetch client: {:?}", e);
                   e
                }).expect("Erro ao buscar cliente");
+
                gera_nfs(cliente,webhook_data.payment_data.net_value).await;
             },
             _ => {
@@ -256,6 +258,8 @@ async fn find_api_cliente(id:&str,pool: &PgPool) -> Result<Cliente,anyhow::Error
    let client = reqwest::Client::new()
       .get(format!("https://sandbox.asaas.com/api/v3/customers/{}",id))
       .header("access_token",API_KEY)
+      .header("accept", "application/json")
+      .header("user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
       .send()
       .await.map_err(|e| {
          error!("Failed to fetch client: {:?}", e);
@@ -324,6 +328,7 @@ async fn save_payment_received(pool:&PgPool,webhook_data: &Payload,format: &[tim
 }
 
 async fn save_payment_confirmed(pool:&PgPool,webhook_data: &Payload,format: &[time::format_description::BorrowedFormatItem<'_>]) {
+   debug!("Salvando pagamento confirmado: {:?}", webhook_data);
    let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
       error!("Failed to fetch client: {:?}", e);
       e
