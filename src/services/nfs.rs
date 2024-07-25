@@ -20,10 +20,12 @@ use tracing::{debug, error};
 
 use crate::handlers::clients::Cliente;
 
+//TODO cancela nota fiscal
+
 
 //TODO gera nota fiscal para os clientes que tiverem o pagamento confirmado
 //TODO pegar os valores para o scraper usando f12
-pub async fn gera_nfs(cliente:Cliente,value:f32) {
+pub async fn gera_nfs(cliente:&Cliente,value:f32) {
 
     let client = ClientBuilder::native().connect("http://localhost:9515").await.map_err(|e| {
         error!("failed to connect to WebDriver: {:?}", e);

@@ -47,3 +47,4 @@ pub async fn create_radius_pg_pool() -> Result<Pool<Postgres>> {
     Ok(pool)
 }
 
+

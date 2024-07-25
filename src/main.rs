@@ -2,26 +2,33 @@ mod db;
 mod handlers;
 mod services;
 
+use anyhow::anyhow;
 use axum::extract::Request;
 use axum::http;
 use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::{delete, put};
 use axum::{Router, routing::get, routing::post, extract::Extension};
+use cron::Schedule;
 use db::create_postgres_pool;
-use handlers::clients::{delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
+use handlers::clients::{delete_cliente, get_all_clientes, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
 use handlers::contrato::generate_contrato;
 use handlers::dici::{generate_dici, show_dici_list};
 use handlers::mikrotik::{delete_mikrotik, failover_mikrotik_script, failover_radius_script, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
 use once_cell::sync::Lazy;
+use radius::radius::{bloqueia_cliente, create_radius_cliente_pool, create_radius_plano_bloqueado};
 use services::webhooks::webhook_handler;
+use sqlx::{query, PgPool};
+use time::macros::format_description;
+use time::PrimitiveDateTime;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::{debug, error, info};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::str::FromStr;
 use std::sync::Arc;
 
 // Define allowed IPs
@@ -81,6 +88,53 @@ async fn check_access_token(req: Request,next: Next) -> Result<impl IntoResponse
     }
 }
 
+async fn scheduler(pool:Arc<PgPool>) {
+    // Define the cron expression for the 12th day of every month at midnight
+    let expression = "0 0 0 12 * *"; // Seconds Minutes Hours Day-of-Month Month Day-of-Week
+
+    let schedule = Schedule::from_str(expression).expect("Erro ao criar scheduler para bloqueio de cliente");
+
+    let mut upcoming = schedule.upcoming(chrono::Utc);
+    while let Some(next) = upcoming.next() {
+        let duration = next - chrono::Utc::now();
+        info!("Next run at {:?}", next);
+
+        if duration > chrono::Duration::zero() {
+            //TODO check all the clients that have not paid and block them
+            //could check by the db with payment confirmed/received
+            let clientes = get_all_clientes(&*pool).await.map_err(|e| {
+                error!("Failed to fetch clientes: {:?}", e);
+                anyhow!("Failed to fetch all clientes")
+            }).expect("Erro ao buscar clientes");
+
+            for cliente in clientes {
+                //TODO check the cliente_id inside the payment confirmed for the current month
+                //Format chrono to primitiveDateTive
+                let format = format_description!("[day]_[month]_[year]_[hour]:[minute]:[second].[subsecond]");
+                let date = PrimitiveDateTime::parse(chrono::Utc::now().to_string().as_str(), format).expect("Erro ao formatar data");
+
+                //BUG maybe the way i am cheking the date is not the best
+                let payment = query!("SELECT * FROM payment_confirmed where cliente_id = $1 and created_at >= $2 and created_at <= $3",cliente.id,date,date)
+                .fetch_optional(&*pool).await.map_err(|e| {
+                    error!("Failed to fetch payment_confirmed: {:?}", e);
+                    anyhow!("Failed to fetch all payment_confirmed")
+                }).expect("Erro ao buscar payment_confirmed");
+
+                if payment.is_none() {
+                    bloqueia_cliente(cliente.login).await.map_err(|e| {
+                        error!("Failed to block cliente: {:?}", e);
+                        anyhow!("Failed to block cliente")
+                    }).expect("Erro ao bloquear cliente");
+                }
+
+            }
+
+        }
+    }
+
+
+}
+
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
@@ -104,11 +158,23 @@ async fn main() {
     */
 
 
+    create_radius_cliente_pool().await.map_err(|e| {
+        error!("Failed to create radius cliente pool: {:?}", e);
+        panic!("Failed to create radius cliente pool")
+    }).expect("Failed to create radius cliente pool");
+
+    create_radius_plano_bloqueado().await.map_err(|e| {
+        error!("Failed to create radius plano bloqueado: {:?}", e);
+        panic!("Failed to create radius plano bloqueado")
+    }).expect("Failed to create radius plano bloqueado");
+
     //prepara templates dos contratos
     handlers::contrato::add_template(&pg_pool).await.map_err(|e| {
         error!("Failed to prepare contrato templates: {:?}", e);
         panic!("Failed to prepare contrato templates")
     }).expect("Failed to prepare contrato templates");
+
+    tokio::spawn(scheduler(pg_pool.clone()));
 
     let clientes_routes = Router::new()
         .route("/",get(show_cliente_list))

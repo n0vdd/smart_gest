@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use axum::{http::{self}, response::IntoResponse, Extension, Json};
 use chrono::{Datelike,  Local};
+use radius::radius::{bloqueia_cliente, checa_cliente_bloqueado, desbloqueia_cliente};
 use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as, PgPool};
 use time::macros::format_description;
 use tracing::{debug, error};
 
-use crate::{handlers::clients::{Cliente, ClienteDto}, services::nfs::gera_nfs};
+use crate::{handlers::{clients::{Cliente, ClienteDto}, planos::find_plano_by_cliente}, services::nfs::gera_nfs};
 
 ///!this is the api key for the sandbox, it should be set on the env for production
 const API_KEY: &str = "$aact_YTU5YTE0M2M2N2I4MTliNzk0YTI5N2U5MzdjNWZmNDQ6OjAwMDAwMDAwMDAwMDAwODUzNzI6OiRhYWNoXzAzYTI4MDhmLWI0NmItNDliNC1hNTIwLTRkNWUzZDBjNTQxZg==";
@@ -95,6 +97,26 @@ pub async fn webhook_handler(
          if !check_if_payment_exists(&webhook_data.id, "payment_confirmed", &*pool).await.expect("Erro ao checar se o pagamento ja existe") {
             save_payment_confirmed(&pool, &webhook_data, format).await.expect("Erro ao salvar pagamento confirmado");
          }
+         
+         let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
+            error!("Failed to fetch client: {:?}", e);
+            anyhow::anyhow!("Erro ao buscar cliente no sistema asaas")
+         }).expect("Erro ao buscar cliente");
+
+         if checa_cliente_bloqueado(&cliente.nome).await.map_err(|e| {
+            error!("Failed to check if client is blocked: {:?}", e);
+            anyhow!("Erro ao checar se o cliente esta bloqueado")
+         }).expect("Erro ao checar se o cliente esta bloqueado") {
+            let plano = find_plano_by_cliente(&pool, cliente.id).await.map_err(|e| {
+               error!("Failed to fetch client plan: {:?}", e);
+               anyhow!("Erro ao buscar plano do cliente")
+            }).expect("Erro ao buscar plano do cliente");
+
+            desbloqueia_cliente(&cliente.nome, plano.nome).await.map_err(|e| {
+               error!("Failed to unblock client: {:?}", e);
+               anyhow!("Erro ao desbloquear cliente")
+            }).expect("Erro ao desbloquear cliente");
+         }
          http::StatusCode::OK
       }, 
 
@@ -110,7 +132,22 @@ pub async fn webhook_handler(
                   e
                }).expect("Erro ao buscar cliente");
 
-               gera_nfs(cliente,webhook_data.payment_data.net_value).await;
+               gera_nfs(&cliente,webhook_data.payment_data.net_value).await;
+
+               if checa_cliente_bloqueado(&cliente.nome).await.map_err(|e| {
+                  error!("Failed to check if client is blocked: {:?}", e);
+                  anyhow!("Erro ao checar se o cliente esta bloqueado")
+               }).expect("Erro ao checar se o cliente esta bloqueado") {
+                  let plano = find_plano_by_cliente(&pool, cliente.id).await.map_err(|e| {
+                     error!("Failed to fetch client plan: {:?}", e);
+                     anyhow!("Erro ao buscar plano do cliente")
+                  }).expect("Erro ao buscar plano do cliente");
+
+                  desbloqueia_cliente(&cliente.nome, plano.nome).await.map_err(|e| {
+                     error!("Failed to unblock client: {:?}", e);
+                     anyhow!("Erro ao desbloquear cliente")
+                  }).expect("Erro ao desbloquear cliente");
+               }
             },
             _ => {
                //TODO mandar algum aviso e logar, nao deveria nem chegar nesse flow
@@ -131,6 +168,18 @@ pub async fn webhook_handler(
          //TODO cancelar nota fiscal de servico
          if Local::now().day() > 12 {
             // TODO: block client in radius
+            let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
+               error!("Failed to fetch client: {:?}", e);
+               anyhow!("Erro ao buscar cliente no sistema asaas")
+            }).expect("Erro ao buscar cliente");
+
+            if let Some(login) = cliente.login {
+               bloqueia_cliente(login).await.map_err(|e| {
+                  error!("Failed to block client: {:?}", e);
+                  anyhow!("Erro ao bloquear cliente no servidor radius")
+               }).expect("Erro ao bloquear cliente");
+            }
+
          }
          http::StatusCode::OK
       }, 
@@ -138,6 +187,17 @@ pub async fn webhook_handler(
       Event::PaymentRefundInProgress => {
          if Local::now().day() > 12 {
             // TODO: block client in radius
+            let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
+               error!("Failed to fetch client: {:?}", e);
+               anyhow!("Erro ao buscar cliente no sistema asaas")
+            }).expect("Erro ao buscar cliente");
+
+            if let Some(login) = cliente.login {
+               bloqueia_cliente(login).await.map_err(|e| {
+                  error!("Failed to block client: {:?}", e);
+                  anyhow!("Erro ao bloquear cliente no servidor radius")
+               }).expect("Erro ao bloquear cliente");
+            }
          }
          http::StatusCode::OK
       },

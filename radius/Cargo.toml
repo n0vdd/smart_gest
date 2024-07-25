@@ -8,7 +8,7 @@ anyhow = "1.0.86"
 dotenv = "0.15.0"
 env_logger = "0.11.3"
 log = "0.4.22"
-sqlx = {version = "0.7.4", features = ["runtime-tokio-native-tls", "postgres", "macros"]}
+sqlx = {version = "0.7.4", features = ["runtime-tokio-native-tls", "postgres", "macros","ipnetwork"]}
 thiserror = "1.0.61"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"

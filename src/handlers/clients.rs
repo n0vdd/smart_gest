@@ -1,4 +1,5 @@
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
+use radius::radius::{add_cliente_radius, ClienteNas};
 use time::{Date, PrimitiveDateTime};
 use tracing::{debug, error};
 use validator::Validate;
@@ -27,6 +28,7 @@ pub struct ClienteDto {
     #[serde(flatten)]
     pub endereco: EnderecoDto,
     pub telefone: String,
+    //TODO this is not optional, should not be on db aswell
     pub login: String,
     pub senha: String,
     pub mikrotik_id: Option<i32>,
@@ -136,6 +138,21 @@ impl<'r> Decode<'r, Postgres> for TipoPessoa {
         let int_value = <bool as Decode<Postgres>>::decode(value)?;
         Ok(TipoPessoa::from_bool(int_value))
     }
+}
+
+pub struct SimpleCliente {
+    pub id: i32,
+    pub nome: String,
+    pub login: String
+}
+
+pub async fn get_all_clientes(pool: &PgPool) -> Result<Vec<SimpleCliente>, anyhow::Error> {
+    query_as!(SimpleCliente, "SELECT id,nome,login FROM clientes")
+        .fetch_all(pool)
+        .await.map_err(|e|{
+            error!("Failed to fetch clients: {:?}", e);
+            anyhow::anyhow!("Failed to fetch all clients")
+        })
 }
 
 // Handlers
@@ -417,6 +434,26 @@ pub async fn register_cliente(
     }).expect("Failed to insert client");
 
     add_cliente_to_asaas(&client).await.expect("Failed to add client to asaas");
+
+    let plano_nome = query!("SELECT nome FROM planos WHERE id = $1", client.plano_id)
+        .fetch_one(&*pool)
+        .await
+        .map_err(|e| {
+            error!("Failed to fetch plan name: {:?}", e);
+            return Html("Failed to fetch plan name")
+        }).expect("Failed to fetch plan name")
+        .nome;
+
+    let cliente_radius = ClienteNas {
+        username: client.login,
+        password: client.senha,
+        plano_nome
+    };
+
+    add_cliente_radius(cliente_radius).await.map_err(|e| {
+        error!("Failed to add client to radius: {:?}", e);
+        return Html("Failed to add client to radius")
+    }).expect("Failed to add client to radius");
 
     Redirect::to("/cliente").into_response()
 }

@@ -1,6 +1,7 @@
 use askama::Template;
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
+use radius::radius::{create_mikrotik_radius, MikrotikNas};
 use serde::{Deserialize, Serialize};
 use time::PrimitiveDateTime;
 use tracing::{debug, error};
@@ -180,6 +181,16 @@ pub async fn register_mikrotik(
         return Html("<p>Failed to insert Mikrotik</p>".to_string())
     }).expect("Failed to insert Mikrotik");
 
+    let mikrotik_nas = MikrotikNas {
+        nasname: mikrotik.ip.to_string(),
+        shortname: mikrotik.nome,
+        secret: mikrotik.secret,
+    };
+
+    create_mikrotik_radius(mikrotik_nas).await.map_err(|e| {
+        error!("Falha ao adicionar mikrotik para tabela nas da db radius {e}");
+        return Html("<p>Falha ao adicionar mikrotik ao radius</p>")
+    }).expect("Falha ao adicionar mikrotik a tabela nas do radius");
     Redirect::to("/mikrotik").into_response()
 }
 

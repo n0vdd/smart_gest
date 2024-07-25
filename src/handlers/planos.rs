@@ -3,6 +3,7 @@ use std::sync::Arc;
 use askama::Template;
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
+use radius::radius::{create_radius_plano, PlanoRadiusDto};
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, query, query_as, PgPool};
 use time::PrimitiveDateTime;
@@ -190,6 +191,18 @@ pub async fn register_plano(
         error!("Failed to insert Plano: {:?}", e);
         return Html("<p>Failed to insert Plano</p>".to_string());
     }).expect("Failed to insert Plano");
+
+
+    let radius_plano = PlanoRadiusDto {
+        nome: plano.nome,
+        velocidade_up: plano.velocidade_up,
+        velocidade_down: plano.velocidade_down
+    };
+
+    create_radius_plano(radius_plano).await.map_err(|e| {
+        error!("Failed to create radius plano: {:?}", e);
+        return Html("<p>Failed to create radius plano</p>".to_string());
+    }).expect("Failed to create radius plano");
 
     Redirect::to("/plano")
 }
