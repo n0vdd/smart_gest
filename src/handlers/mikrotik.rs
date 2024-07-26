@@ -141,6 +141,7 @@ pub async fn failover_radius_script(Path(mikrotik_id):Path<i32>,Extension(pool):
 //TODO make the html appear to the user
 //Gets the mikrotik id(passed by the button) 
 //deletes the related mikrotik
+//The redirect is causing error with htmx
 pub async fn delete_mikrotik(Path(mikrotik_id):Path<i32>,Extension(pool): Extension<Arc<PgPool>>) -> impl IntoResponse {
     query!("DELETE FROM mikrotik where id = $1",mikrotik_id)
         .execute(&*pool)

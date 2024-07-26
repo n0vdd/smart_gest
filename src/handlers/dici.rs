@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
+use anyhow::Context;
 use askama:: Template;
 use axum::{response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
-use chrono::{Datelike, Local };
+use chrono::{Datelike, Local, NaiveDate };
 use serde::Deserialize;
 use sqlx::{query, query_as, PgPool};
 use time::{macros::format_description, Date, PrimitiveDateTime};
@@ -31,12 +32,13 @@ pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
   //having all the months for the year we are an the previous one is pretty ok
   //but it could be better if the year we are now i just have until the current month
   //and the precevious year there are all the months
-  let mut reference_date = (1..=12)
+  let current_month = Local::now().month();
+  let current_year = Local::now().year();
+
+  let mut reference_date = (1..=current_month)
       .map(|month| format!("{:02}_{}", month, current_year))
       .collect::<Vec<String>>();
-  
-  //This is also a not really good way of dealing with the data, vecs of strings and shit being created and appended to other vec of strings
-  //rapping the heap, maybe it is not needded, not important enough
+
   let mut past_reference_date = (1..=12)
       .map(|month| format!("{:02}_{}", month, current_year - 1))
       .collect::<Vec<String>>();
@@ -58,7 +60,7 @@ pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
 
 #[derive(Deserialize)]
 pub struct GenerateDiciForm {
-  reference_date: String,
+  pub reference_date: String,
 }
 
 struct Dici {
@@ -185,3 +187,74 @@ pub async fn generate_dici(Extension(pool): Extension<Arc<PgPool>>,Form(form): F
 }
 
 
+pub async fn generate_dici_month_year(pool: &PgPool, month: u32, year: i32) -> Result<(),anyhow::Error> {
+  // Date handling
+  let date_format = format_description!("[day]_[month]_[year]_[hour]:[minute]:[second].[subsecond]");
+  let rf = format!("{}_{}_{}", Local::now().day(), month, year);
+  debug!("Date struct for comparing with timestamp in db: {:?}", rf);
+  let reference_date = time::PrimitiveDateTime::parse(&rf, &date_format).expect("Failed to parse reference date");
+
+  let clients = fetch_tipo_clientes_before_date(pool, reference_date)
+      .await
+      .context("Falha ao pegar clientes antes da data de referencia")?;
+
+  let mut pfs: Vec<TipoPessoa> = Vec::new();
+  let mut pjs: Vec<TipoPessoa> = Vec::new();
+
+  for cliente in clients {
+      match cliente {
+          TipoPessoa::PessoaFisica => pfs.push(cliente),
+          TipoPessoa::PessoaJuridica => pjs.push(cliente),
+      }
+  }
+
+  debug!("Pessoas Fisicas: {:?}", pfs);
+  debug!("Pessoas Juridicas: {:?}", pjs);
+
+  let filename = format!("dici_{}_{}.csv", year, month);
+  let path = format!("dicis/{}", filename);
+
+  let mut csv_content = String::from("CNPJ;ANO;MES;COD_IBGE;TIPO_CLIENTE;TIPO_ATENDIMENTO;TIPO_MEIO;TIPO_PRODUTO;TIPO_TECNOLOGIA;VELOCIDADE;ACESSOS\n");
+
+  let append_client_count = |clients: Vec<TipoPessoa>, tipo_cliente: &str, csv_content: &mut String| {
+      if !clients.is_empty() {
+          let client_count = clients.len();
+          let row = format!(
+              "{};{};{};{};{};URBANO;fibra;internet;FTTB;200;{}\n",
+              CNPJ,
+              year,
+              month,
+              COD_IBGE,
+              tipo_cliente,
+              client_count
+          );
+          csv_content.push_str(&row);
+      }
+  };
+
+  append_client_count(pfs, "PF", &mut csv_content);
+  append_client_count(pjs, "PJ", &mut csv_content);
+
+  let mut file = File::create(&path)
+      .await
+      .context("Failed to create file")?;
+  file.write_all(csv_content.as_bytes())
+      .await
+      .context("Failed to write to file")?;
+
+  let date_format = format_description!("[day]_[month]_[year]");
+  let rf = format!("{}_{}_{}", Local::now().day(), month, year);
+  let reference_date = Date::parse(&rf, &date_format).expect("Failed to parse reference date");
+  debug!("Reference Date struct: {:?}", reference_date);
+
+  sqlx::query!(
+      "INSERT INTO dici (path, reference_date) VALUES ($1, $2)",
+      path,
+      reference_date
+  )
+  .execute(pool)
+  .await
+  .context("Failed to save DICI record to the database")?;
+
+  Ok(())
+}

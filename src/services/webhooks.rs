@@ -174,7 +174,7 @@ pub async fn webhook_handler(
             }).expect("Erro ao buscar cliente");
 
             if let Some(login) = cliente.login {
-               bloqueia_cliente(login).await.map_err(|e| {
+               bloqueia_cliente(&login).await.map_err(|e| {
                   error!("Failed to block client: {:?}", e);
                   anyhow!("Erro ao bloquear cliente no servidor radius")
                }).expect("Erro ao bloquear cliente");
@@ -193,7 +193,7 @@ pub async fn webhook_handler(
             }).expect("Erro ao buscar cliente");
 
             if let Some(login) = cliente.login {
-               bloqueia_cliente(login).await.map_err(|e| {
+               bloqueia_cliente(&login).await.map_err(|e| {
                   error!("Failed to block client: {:?}", e);
                   anyhow!("Erro ao bloquear cliente no servidor radius")
                }).expect("Erro ao bloquear cliente");
