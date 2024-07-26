@@ -15,13 +15,60 @@ const ID_CNAE: &str = "117019000";
 const DESCRICAO: &str = "Serviço de internet";
 
 
-use fantoccini::{Client, ClientBuilder, Locator};
+use fantoccini::{client, Client, ClientBuilder, Locator};
 use tracing::{debug, error};
 
 use crate::handlers::clients::Cliente;
 
 //TODO cancela nota fiscal
+pub async fn cancela_nfs() {
+    let client = ClientBuilder::native().connect("http://localhost:9515").await.map_err(|e| {
+        error!("failed to connect to WebDriver: {:?}", e);
+        e
+    }).expect("failed to connect to WebDriver");
+    //TODO login no sistema da prefeitura de nova lima
+    login(&client).await;
 
+
+    //TODO navegar para essa url: https://e-nfs.com.br/e-nfs_novalima/servlet/hwconsultaprocessocontrib
+
+    //TODO clicar em button2
+
+    //TODO adicionar o motivo(dados errados ou coisa do tipo)
+    //servico cancelado sla
+
+    //achar id da nota fiscal, posso pesquisar no sistema de arquivo pela data ou coisa do tipo
+    //colocar id no campo vNFSNUMERO
+    //clicar em BTNINCLUIRNOTA
+
+    //confirma clicando em BUTTON2
+    
+    //TODO enviar e receber a nota fiscal cancelada
+    //salvar a mesma para o sistema de arquivos
+    //caminho: notas_fiscais/{cliente_nome}/{data}.pdf
+    //e salvar um o pagamento relacionado,o caminho e a data no banco de dados
+}
+
+//TODO recebe o mes/ano que estamos
+//usa o mes que estamos como data final(sempe chamado no inicio do mes)
+//e o mes passado como o mes inicial
+pub async fn exporta_nfs(month:i32,year:i32) {
+    let client = ClientBuilder::native().connect("http://localhost:9515").await.map_err(|e| {
+        error!("failed to connect to WebDriver: {:?}", e);
+        e
+    }).expect("failed to connect to WebDriver");
+
+    login(&client).await;
+
+    //TODO navegar para https://e-nfs.com.br/e-nfs_novalima/servlet/hwmcontabilidade
+
+    //seleciona as datas no calendario de js
+
+    //clica em BUTTON1
+
+    //clica em vDOWNLOAD_0001
+
+}
 
 //TODO gera nota fiscal para os clientes que tiverem o pagamento confirmado
 //TODO pegar os valores para o scraper usando f12

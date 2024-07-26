@@ -7,7 +7,8 @@ CREATE TABLE nas (
     secret VARCHAR(60) NOT NULL DEFAULT 'secret',
     server VARCHAR(64),
     community VARCHAR(50),
-    description VARCHAR(200) DEFAULT 'RADIUS Client'
+    description VARCHAR(200) DEFAULT 'RADIUS Client',
+    UNIQUE(nasname)
 );
 
 CREATE INDEX idx_nasname ON nas(nasname);

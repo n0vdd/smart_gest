@@ -9,11 +9,13 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::{delete, put};
 use axum::{Router, routing::get, routing::post, extract::Extension};
+use axum_extra::extract::Form;
+use chrono::{Datelike, Utc};
 use cron::Schedule;
 use db::create_postgres_pool;
 use handlers::clients::{delete_cliente, get_all_clientes, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
 use handlers::contrato::generate_contrato;
-use handlers::dici::{generate_dici, show_dici_list};
+use handlers::dici::{generate_dici, generate_dici_month_year, show_dici_list, GenerateDiciForm};
 use handlers::mikrotik::{delete_mikrotik, failover_mikrotik_script, failover_radius_script, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
@@ -88,51 +90,71 @@ async fn check_access_token(req: Request,next: Next) -> Result<impl IntoResponse
     }
 }
 
-async fn scheduler(pool:Arc<PgPool>) {
-    // Define the cron expression for the 12th day of every month at midnight
-    let expression = "0 0 0 12 * *"; // Seconds Minutes Hours Day-of-Month Month Day-of-Week
+//BUG this may be running all the time
+//TODO should check every day 1 and 12 of the month
+//on day 1 it will call the nfs function that will send the xml of nota fiscal for the month for a email
+//will also generate dici for the previous month and send a notification to a telegram channel
+//on day 12 will check what clientes have not payd and block them
+//when we receive the payment we will unblock the cliente, so there is no need to check again
+async fn scheduler(pool: Arc<PgPool>) {
+    let expression = "0 0 0 1,12 * *"; // Run at midnight on the 1st and 12th of every month
+    let schedule = Schedule::from_str(expression).expect("Invalid cron expression for scheduler");
 
-    let schedule = Schedule::from_str(expression).expect("Erro ao criar scheduler para bloqueio de cliente");
-
-    let mut upcoming = schedule.upcoming(chrono::Utc);
+    let mut upcoming = schedule.upcoming(Utc);
     while let Some(next) = upcoming.next() {
-        let duration = next - chrono::Utc::now();
-        info!("Next run at {:?}", next);
-
+        let now = Utc::now();
+        let duration = next - now;
         if duration > chrono::Duration::zero() {
-            //TODO check all the clients that have not paid and block them
-            //could check by the db with payment confirmed/received
-            let clientes = get_all_clientes(&*pool).await.map_err(|e| {
-                error!("Failed to fetch clientes: {:?}", e);
-                anyhow!("Failed to fetch all clientes")
-            }).expect("Erro ao buscar clientes");
-
-            for cliente in clientes {
-                //TODO check the cliente_id inside the payment confirmed for the current month
-                //Format chrono to primitiveDateTive
-                let format = format_description!("[day]_[month]_[year]_[hour]:[minute]:[second].[subsecond]");
-                let date = PrimitiveDateTime::parse(chrono::Utc::now().to_string().as_str(), format).expect("Erro ao formatar data");
-
-                //BUG maybe the way i am cheking the date is not the best
-                let payment = query!("SELECT * FROM payment_confirmed where cliente_id = $1 and created_at >= $2 and created_at <= $3",cliente.id,date,date)
-                .fetch_optional(&*pool).await.map_err(|e| {
-                    error!("Failed to fetch payment_confirmed: {:?}", e);
-                    anyhow!("Failed to fetch all payment_confirmed")
-                }).expect("Erro ao buscar payment_confirmed");
-
-                if payment.is_none() {
-                    bloqueia_cliente(cliente.login).await.map_err(|e| {
-                        error!("Failed to block cliente: {:?}", e);
-                        anyhow!("Failed to block cliente")
-                    }).expect("Erro ao bloquear cliente");
-                }
-
-            }
-
+            tokio::time::sleep(duration.to_std().unwrap()).await;
         }
+
+        // Determine the day of the task
+        let day = next.day();
+
+        match day {
+            1 => {
+                // Call the function to send the nota fiscal XML and generate DICI
+                //TODO call code to generate dici and generates telegram notification
+
+                generate_dici_month_year(&pool,now.month(),now.year()).await.map_err(|e| {
+                    error!("Failed to generate dici: {:?}", e);
+                    anyhow!("Failed to generate dici")
+                }).expect("Erro ao gerar dici");
+            }
+            12 => {
+                let clientes = get_all_clientes(&*pool).await.map_err(|e| {
+                    error!("Failed to fetch clientes: {:?}", e);
+                    anyhow!("Failed to fetch all clientes")
+                }).expect("Erro ao buscar clientes");
+
+                for cliente in clientes {
+                    //TODO check the cliente_id inside the payment confirmed for the current month
+                    //Format chrono to primitiveDateTive
+                    let format = format_description!("[day]_[month]_[year]_[hour]:[minute]:[second].[subsecond]");
+                    let date = PrimitiveDateTime::parse(chrono::Utc::now().to_string().as_str(), format).expect("Erro ao formatar data");
+
+                    //BUG maybe the way i am cheking the date is not the best
+                    let payment = query!("SELECT * FROM payment_confirmed where cliente_id = $1 and created_at >= $2 and created_at <= $3",cliente.id,date,date)
+                        .fetch_optional(&*pool).await.map_err(|e| {
+                            error!("Failed to fetch payment_confirmed: {:?}", e);
+                            anyhow!("Failed to fetch all payment_confirmed")
+                    }).expect("Erro ao buscar payment_confirmed");
+
+                    if payment.is_none() {
+                        bloqueia_cliente(&cliente.login).await.map_err(|e| {
+                            error!("Failed to block cliente: {:?}", e);
+                            anyhow!("Failed to block cliente")
+                        }).expect("Erro ao bloquear cliente");
+                    }
+                }
+            }
+            _ => {
+                error!("Unexpected day: {}", day);
+            }
+        }
+
+        info!("Task executed on {}", next);
     }
-
-
 }
 
 #[tokio::main]
@@ -157,7 +179,6 @@ async fn main() {
     info!("mysql pool:{:?} criado",mysql_pool);
     */
 
-
     create_radius_cliente_pool().await.map_err(|e| {
         error!("Failed to create radius cliente pool: {:?}", e);
         panic!("Failed to create radius cliente pool")
@@ -174,6 +195,7 @@ async fn main() {
         panic!("Failed to prepare contrato templates")
     }).expect("Failed to prepare contrato templates");
 
+    //BUG this is running all the time 
     tokio::spawn(scheduler(pg_pool.clone()));
 
     let clientes_routes = Router::new()

@@ -1,8 +1,8 @@
-use std::{env, net::Ipv4Addr, process::{Command, ExitStatus}};
+use std::{env, net::Ipv4Addr, os::unix::process::CommandExt, process::{Command, ExitStatus}};
 
 use anyhow::anyhow;
 use sqlx::{query, types::ipnetwork::IpNetwork,  Connection, PgConnection };
-use tracing::error;
+use tracing::{debug, error};
 
 pub struct MikrotikNas {
     //This is ip
@@ -12,12 +12,20 @@ pub struct MikrotikNas {
     pub secret: String,
 }
 
+const DATABASE_URL: &str = "postgres://radius:radpass@localhost:5434/radius";
 
 
+
+//Insert mikrotik into nas  table
+//with this and the radius server set on the mikrotik, radius should manage its users already
+//After adding the mikrotik to the nas table, the freeradius is restarted
+///!there is a need to create a entry on sudoers.d/(user running the server) file so that restarting freeradius doesnt needs a password
+/// %user ALL= NOPASSWD: /bin/systemctl restart freeradius 
 pub async fn create_mikrotik_radius(
     mikrotik: MikrotikNas,
 ) -> Result<(), anyhow::Error> {
-    let mut pool = PgConnection::connect(std::env::var("DATABASE_URL").unwrap().as_str()).await.map_err(|e| {
+    //this should use env!()
+    let mut pool = PgConnection::connect(DATABASE_URL).await.map_err(|e| {
         error!("Erro ao conectar a db {:?}",e);
         anyhow!("Erro a conectar a radius_db")
     })?;
@@ -39,8 +47,19 @@ pub async fn create_mikrotik_radius(
         anyhow!("Failed to insert Mikrotik into nas radius table".to_string())
     })?;
 
+    //TODO append this data to clients.conf for freeradius like
+    //cliente mikrotik.shortname {
+    //  ipaddr = mikrotik.nasname
+    //  secret = mikrotik.secret
+    //}
+
+
     //BUG this maybe fucks the clientes who are authed
-    let freeradius_restart = Command::new("systemctl restart freeradius").output().map_err(|e| {
+    let freeradius_restart = Command::new("sudo") 
+        .arg("systemctl")
+        .arg("restart")
+        .arg("freeradius")
+        .output().map_err(|e| {
         error!("erro ao reiniciar freeradius: {e}");
         anyhow!("erro ao reiniciar freeradius {e}")
     })?;
@@ -64,8 +83,13 @@ pub struct ClienteNas {
 }
 
 //TODO add users when register cliente is a success(it should call this function after succes,look at how)
+//?idk why the use cleartext-password everywhere(dont like it),(maybe there is a way to save password as a hash?)
+//TODO how could i get rid of all the cleartext passwords? they are all one time generated and shit, but dont like it
+//gets the login,password and plano name from the cliente
+//add the cliente name and pass as a radius user
+//add the cliente to the group of its plano(already with bandiwth limitation and shit)
 pub async fn add_cliente_radius(cliente:ClienteNas) -> Result<(), anyhow::Error> {
-    let mut pool = PgConnection::connect(env!("DATABASE_URL")).await.map_err(|e| {
+    let mut pool = PgConnection::connect(DATABASE_URL).await.map_err(|e| {
         error!("Erro ao conectar a db {:?}",e);
         anyhow!("Erro a conectar a radius_db")
     })?;
@@ -98,14 +122,24 @@ INSERT INTO `radippool`
 ('pool_bloq','100.127.0.1','','','','0'),
 ('pool_bloq','100.127.0.2','','','','0');
 */
-//Cria uma pool de ips para o cliente usar
-//Um loop para gerar 254 ips
+//Cria uma pool de ips para o clientes usarem
+//Um loop para gerar 254 ips para a subnet 100.64.0.0/24
 pub async fn create_radius_cliente_pool() -> Result<(), anyhow::Error> {
-    let mut pool = PgConnection::connect(env!("DATABASE_URL")).await.map_err(|e| {
+    let mut pool = PgConnection::connect(DATABASE_URL).await.map_err(|e| {
         error!("Erro ao conectar a db {:?}",e);
         anyhow!("Erro a conectar a radius_db")
     })?;
 
+    //TODO checar se a pool ja foi criada
+    let ip_pool = query!("SELECT * FROM radippool WHERE pool_name LIKE 'ips_validos'").fetch_optional(&mut pool).await.map_err(|e| {
+        error!("Failed to select ips from radippool: {:?}", e);
+        anyhow!("Failed to select ips from radippool".to_string())
+    })?;
+
+    if ip_pool.is_some() {
+        debug!("Pool de ips ja foi criada");
+        return Ok(());
+    }
     let mut i = 1;
     //Loop para gerar todos os ips validos
     while i < 255 {
@@ -129,18 +163,32 @@ pub async fn create_radius_cliente_pool() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+//TODO olhar se deletar o cliente seria viavel(parece bem mais trabalhoso, mas nao sei)
+//Cria a pool utilizada pelo plano bloqueado
+//Cria o plano BLOQUEADO(plano com 1k de velocidade), tornando impossivel a utilizacao do servico
+//Esse plano permite bloquear o cliente simplesmente trocando o cliente do seu plano padrao para o plano bloqueado
 pub async fn create_radius_plano_bloqueado() -> Result<(),anyhow::Error> {
-    let mut pool = PgConnection::connect(env!("DATABASE_URL")).await.map_err(|e| {
+    let mut pool = PgConnection::connect(DATABASE_URL).await.map_err(|e| {
         error!("Erro ao conectar a db {:?}",e);
         anyhow!("Erro a conectar a radius_db")
     })?;
 
+    //TODO checa se o plano bloqueado ja existe
+    let plano_bloqueado = query!("SELECT * FROM radgroupcheck WHERE groupname LIKE 'BLOQUEADO'").fetch_optional(&mut pool).await.map_err(|e| {
+        error!("Failed to select plano from radgroupcheck: {:?}", e);
+        anyhow!("Failed to select plano from radgroupcheck".to_string())
+    })?;
+
+    if plano_bloqueado.is_some() {
+        debug!("Plano bloqueado ja foi criado");
+        return Ok(());
+    }
 
     let mut i = 1;
     //Loop para gerar todos os ips bloqueados
     while i < 255 {
         //Instancia um ip para salvar na db
-        let ip = Ipv4Addr::new(100, 127, 0, i);
+        let ip = Ipv4Addr::new(100, 65, 0, i);
         let ip = IpNetwork::new(std::net::IpAddr::V4(ip), 24).map_err(|e|{
             error!("Failed to create ip network: {:?}", e);
             anyhow!("Failed to create ip network".to_string())
@@ -190,21 +238,17 @@ pub async fn create_radius_plano_bloqueado() -> Result<(),anyhow::Error> {
     Ok(())
 }
 
-//TODO talvez valha a pena ter uma pool de ips bloqueados
-//embora acho que nao seja necessario posso so remover os clientes que nao pagaram,inves de colocar em um plano sem internet
-//nao vejo o porque de fazer isso
 
-//TODO disable users if there is no payment confirmed from webhook after 12 days of the month
-//UPDATE `radusergroup` SET `groupname` = 'BLOQUEADO' WHERE `username` LIKE 'jose@provedor.com';
-//Coloca o cliente como bloqueado(plano sem acesso real a internet)
-pub async fn bloqueia_cliente(nome:String) -> Result<(), anyhow::Error> {
-    let mut pool = PgConnection::connect(env!("DATABASE_URL")).await.map_err(|e| {
+//Recebe o login do cliente para bloquear
+//Coloca o cliente como bloqueado(plano sem acesso real a internet),ao trocalo de seu grupo padrao para o grupo bloqueado
+pub async fn bloqueia_cliente(login:&str) -> Result<(), anyhow::Error> {
+    let mut pool = PgConnection::connect(DATABASE_URL).await.map_err(|e| {
         error!("Erro ao conectar a db {:?}",e);
         anyhow!("Erro a conectar a radius_db")
     })?;
 
     query!("UPDATE radusergroup SET groupname = 'BLOQUEADO' WHERE username LIKE $1",
-    nome).execute(&mut pool).await.map_err(|e| {
+    login).execute(&mut pool).await.map_err(|e| {
         error!("Failed to update user into radusergroup: {:?}", e);
         anyhow!("Failed to update user into radusergroup radius table".to_string())
     })?;
@@ -212,17 +256,17 @@ pub async fn bloqueia_cliente(nome:String) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-//Recebe o nome do cliente
-//Checa se o cliente esta bloqueado
-//Retorna true casao ele esteja
-pub async fn checa_cliente_bloqueado(nome:&str) -> Result<bool, anyhow::Error> {
-    let mut pool = PgConnection::connect(env!("DATABASE_URL")).await.map_err(|e| {
+//Recebe o login do cliente
+//Checa se o cliente faz parte do grupo bloqueado
+//Retorna true casao ele faca 
+pub async fn checa_cliente_bloqueado(login:&str) -> Result<bool, anyhow::Error> {
+    let mut pool = PgConnection::connect(DATABASE_URL).await.map_err(|e| {
         error!("Erro ao conectar a db {:?}",e);
         anyhow!("Erro a conectar a radius_db")
     })?;
 
 
-    let result = query!("SELECT groupname FROM radusergroup WHERE username LIKE $1",nome).fetch_one(&mut pool).await.map_err(|e| {
+    let result = query!("SELECT groupname FROM radusergroup WHERE username LIKE $1",login).fetch_one(&mut pool).await.map_err(|e| {
         error!("Failed to select user from radusergroup: {:?}", e);
         anyhow!("Failed to select user from radusergroup radius table".to_string())
     })?;
@@ -234,17 +278,17 @@ pub async fn checa_cliente_bloqueado(nome:&str) -> Result<bool, anyhow::Error> {
     Ok(false)
 }
 
-//Recebe o nome do cliente e o plano que ele deve ser colocado
+//Recebe o login do cliente e o plano que ele deve ser colocado
 //Atualiza o cliente para o plano correto,liberando o acesso a internet
-pub async fn desbloqueia_cliente(nome:&str,plano:String) -> Result<(), anyhow::Error> {
-    let mut pool = PgConnection::connect(env!("DATABASE_URL")).await.map_err(|e| {
+pub async fn desbloqueia_cliente(login:&str,plano:String) -> Result<(), anyhow::Error> {
+    let mut pool = PgConnection::connect(DATABASE_URL).await.map_err(|e| {
         error!("Erro ao conectar a db {:?}",e);
         anyhow!("Erro a conectar a radius_db")
     })?;
 
     //Volta o cliente para o plano quando for confirmado o pagamento
     query!("UPDATE radusergroup SET groupname = $1 WHERE username LIKE $2",
-    plano,nome).execute(&mut pool).await.map_err(|e| {
+    plano,login).execute(&mut pool).await.map_err(|e| {
         error!("Failed to update user into radusergroup: {:?}", e);
         anyhow!("Failed to update user into radusergroup radius table".to_string())
     })?;
@@ -256,7 +300,6 @@ pub async fn desbloqueia_cliente(nome:&str,plano:String) -> Result<(), anyhow::E
 //TODO enable users, this will be used to enable users that are disabled(when payment is confirmed from webhook(after day 12 of the month)
 
 
-//TODO cria plano para o usuario
 
 pub struct PlanoRadiusDto {
     pub nome:String,
@@ -264,31 +307,32 @@ pub struct PlanoRadiusDto {
     pub velocidade_down:i32
 }
 
-/*
-
-INSERT INTO `radgroupcheck` (`groupname`, `attribute`, `op`, `value`) VALUES
-('PLANO_10MB', 'Service-Type', '==', 'Framed-User'),
-('PLANO_10MB', 'Framed-Protocol', ':=', 'PPP'),
-('PLANO_10MB', 'Pool-Name', ':=', 'pool_valido');
-INSERT INTO `radgroupreply` (`groupname`, `attribute`, `op`, `value`) VALUES
-('PLANO_10MB', 'Acct-Interim-Interval', ':=', '300'),
-('PLANO_10MB', 'Mikrotik-Rate-Limit', ':=', '5M/10M'),
-('PLANO_10MB', 'MS-Primary-DNS-Server', ':=', '9.9.9.9'),
-('PLANO_10MB', 'MS-Secondary-DNS-Server', ':=', '149.112.112.112');
-*/
 //This is called on every added plano on smart_gest
 //The plano is used for creating the users with consistent settings
 //Just adds the limit and the cliente ip pool
+//Receives the name of the plano and the connection speed
+//Creates the plano on the radius server, its all linked by its name, uses the valid ip pool
+//the one created by: fn create_radius_cliente_pool()
 pub async fn create_radius_plano(plano:PlanoRadiusDto) -> Result<(), anyhow::Error> {
     //This solves it
     //BUG this code would be run from another env maybe?
     //Maybe it is not so performatic, needs to keep recreating connections
     //TODO maybe there is a way to use a pool, i dont think there is
-    let mut pool = PgConnection::connect(env!("DATABASE_URL")).await
+    let mut pool = PgConnection::connect(DATABASE_URL).await
         .map_err(|e| -> _ {
             error!("Failed to create connection: {:?}", e);
             anyhow!("Failed to create connection".to_string())
     })?;
+
+    let plano_criado = query!("SELECT * FROM radgroupcheck WHERE groupname LIKE $1",plano.nome).fetch_optional(&mut pool).await.map_err(|e| {
+        error!("Failed to select plano from radgroupcheck: {:?}", e);
+        anyhow!("Failed to select plano from radgroupcheck".to_string())
+    })?;
+
+    if plano_criado.is_some() {
+        debug!("Plano ja foi criado");
+        return Ok(());
+    }
 
     query!("INSERT INTO radgroupcheck(groupname,attribute,op,value) VALUES ($1,$2,$3,$4)",
     plano.nome,"Service-Type","==","Framed-User").execute(&mut pool).await.map_err(|e| {
