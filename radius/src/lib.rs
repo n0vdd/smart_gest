@@ -29,8 +29,7 @@ pub async fn create_radius_pg_pool() -> Result<Pool<Postgres>> {
         })?;
     
     //get migrations
-    //TODO check if this will overide the db on app restart
-    //it should not
+    //This does not override migrations
     /* 
     let migrator = Migrator::new(Path::new("./radius/migrations")).await.map_err(|e| {
         error!("Failed to create migrator: {:?}", e);

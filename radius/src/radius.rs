@@ -1,8 +1,7 @@
-
-use std::{env, net::Ipv4Addr};
+use std::{env, net::Ipv4Addr, process::{Command, ExitStatus}};
 
 use anyhow::anyhow;
-use sqlx::{query, types::ipnetwork::IpNetwork,  Connection, PgConnection, PgPool};
+use sqlx::{query, types::ipnetwork::IpNetwork,  Connection, PgConnection };
 use tracing::error;
 
 pub struct MikrotikNas {
@@ -14,7 +13,7 @@ pub struct MikrotikNas {
 }
 
 
-//TODO will be used for controlling the freeradius db(mysql)
+
 pub async fn create_mikrotik_radius(
     mikrotik: MikrotikNas,
 ) -> Result<(), anyhow::Error> {
@@ -40,10 +39,19 @@ pub async fn create_mikrotik_radius(
         anyhow!("Failed to insert Mikrotik into nas radius table".to_string())
     })?;
 
-    //TODO generate a systemctl restart freeradius 
-    //BUG this maybe fucks the clietes who are authed
+    //BUG this maybe fucks the clientes who are authed
+    let freeradius_restart = Command::new("systemctl restart freeradius").output().map_err(|e| {
+        error!("erro ao reiniciar freeradius: {e}");
+        anyhow!("erro ao reiniciar freeradius {e}")
+    })?;
 
-    Ok(())
+    //Check is the restart worked
+    if freeradius_restart.status.success() {
+        Ok(())
+    } else {
+        error!("Erro ao reiniciar o radius com systemctl {:?} {:?}",freeradius_restart.stdout,freeradius_restart.stderr);
+        panic!("Processo de reiniciar radius nao retornou um sucesso")
+    }
 }
 
 //TODO check if there is duplicate on the cliente login 
