@@ -2,7 +2,7 @@ use std::{env, net::Ipv4Addr, process::{Command, ExitStatus}};
 
 use anyhow::anyhow;
 use sqlx::{query, types::ipnetwork::IpNetwork,  Connection, PgConnection };
-use tracing::error;
+use tracing::{error, warn};
 
 pub struct MikrotikNas {
     //This is ip
@@ -69,6 +69,17 @@ pub async fn add_cliente_radius(cliente:ClienteNas) -> Result<(), anyhow::Error>
         error!("Erro ao conectar a db {:?}",e);
         anyhow!("Erro a conectar a radius_db")
     })?;
+
+    let opt_cliente = query!("SELECT * FROM radcheck WHERE username LIKE $1",cliente.username).fetch_optional(&mut pool).await.map_err(|e| {
+        error!("Failed to select user from radcheck: {:?}", e);
+        anyhow!("Failed to select user from radcheck radius table".to_string())
+    })?;            
+
+    if opt_cliente.is_some() {
+        //TODO maybe this should not be a error warning
+        warn!("Cliente ja existe na base de dados do radius");
+        return Err(anyhow!("Cliente ja existe na base de dados do radius"));
+    }
 
     //Cria o cliente 
     query!("INSERT INTO radcheck(username,attribute,op,value) VALUES ($1,$2,$3,$4)",
