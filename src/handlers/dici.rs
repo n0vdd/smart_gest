@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use askama:: Template;
 use axum::{response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
 use chrono::{Datelike, Local };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as, PgPool};
 use time::{macros::format_description, Date, PrimitiveDateTime};
 use tokio::{fs::File, io::AsyncWriteExt};
@@ -16,8 +15,8 @@ use super::clients::{fetch_tipo_clientes_before_date,  TipoPessoa};
 const CNPJ:&str = "48530335000148"; // Hardcoded CNPJ
 const COD_IBGE:&str = "3106200"; // Hardcoded COD_IBGE
 
-#[derive(Template)]
-#[template(path = "dici_list.html")]
+//#[derive(Template)]
+//#[template(path = "dici_list.html")]
 struct DiciTemplate {
   reference_date: Vec<String>,
   dicis: Vec<Dici>,
@@ -41,14 +40,19 @@ pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
   // Fetch existing DICI records from the database
   let dicis = fetch_all_dici_records(&pool).await.expect("Erro ao pegar dicis da base de dados");
 
-  let template = DiciTemplate {
-    reference_date: past_reference_date,
-    dicis
-  }.render()
-  .map_err(|e| {
-    error!("Failed to render DICI list template: {:?}", e);
-    e
-  }).expect("Failed to render DICI list template");
+  let mut tera = tera::Tera::new("templates/**").map_err(|e| {
+    error!("Failed to compile templates: {:?}", e);
+  }).expect("Failed to compile templates");
+  tera.add_template_file("templates/dici_list.html", Some("dici list")).map_err(|e| {
+    error!("Failed to add template file: {:?}", e);
+  }).expect("Failed to add template file");
+
+  let mut context = tera::Context::new(); 
+  context.insert("dicis", &dicis);
+
+  let template = tera.render("dici list", &context).map_err(|e| {
+    error!("Failed to render template: {:?}", e);
+  }).expect("Failed to render template");
 
   Html(template)
 }
@@ -58,6 +62,7 @@ pub struct GenerateDiciForm {
   pub reference_date: String,
 }
 
+#[derive(Deserialize,Serialize,Debug)]
 struct Dici {
   id: i32,
   reference_date: Date,

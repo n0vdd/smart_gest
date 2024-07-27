@@ -1,11 +1,11 @@
 use std::env;
-use askama::Template;
 use axum::{extract::Query, response::Html};
 use cnpj::Cnpj;
 use cpf::Cpf;
 use phonenumber::country::Id::BR;
 use reqwest::Client;
 use serde::Deserialize;
+use tera::Tera;
 use thiserror::Error;
 use tracing::{debug, error};
 
@@ -64,18 +64,21 @@ pub async fn lookup_cep(
         };
 
         debug!("converted response to endereco: {:?}", endereco);
-
-        let template = EnderecoSnippetTemplate {
-            cep: endereco.cep,
-            rua: endereco.rua,
-            bairro: endereco.bairro,
-            cidade: endereco.cidade,
-            estado: endereco.estado,
-            ibge: endereco.ibge,
-        }.render().map_err(|e| -> _ {
-            error!("Failed to render endereco snippet: {:?}", e);
-            return Html("Falha ao renderizar snippet do endereco com os dados preenchidos".to_string())
+        let mut tera = Tera::default();
+        tera.add_template_file("templates/snippets/endereco_snippet", Some("endereco snippet")).map_err(|e|  {
+            error!("Failed to open template file: {:?}", e);
+            return Html("Falha ao abrir o arquivo de template".to_string())
         })?;
+
+        let mut context = tera::Context::new();
+        context.insert("endereco", &endereco);
+
+        //TODO alterar o endereco snippet para usar endereco.cep etc
+        let template = tera.render("endereco snippet", &context).map_err(|e| -> _ {
+            error!("Failed to render endereco snippet: {:?}", e);
+            return Html("Falha ao renderizar endereco snippet".to_string())
+        })?;
+
         Ok(Html(template))
     } else {
         let err = format!("HTTP error: {:?}", CepError::CepNotFound);
@@ -84,32 +87,33 @@ pub async fn lookup_cep(
 }
 
 
-#[derive(Template)]
-#[template(path = "snippets/cpf_cnpj_snippet.html")]
+//#[derive(Template)]
+//#[template(path = "snippets/cpf_cnpj_snippet.html")]
 pub struct CpfCnpjTemplate {
     pub formatted_cpf_cnpj: String,
     pub cpf_cnpj: String,
 }
 
-#[derive(Template)]
-#[template(path = "snippets/telefone_snippet.html")]
+//#[derive(Template)]
+//#[template(path = "snippets/telefone_snippet.html")]
 pub struct TelefoneTemplate {
     pub telefone: String,
 }
 
 //Mosta o snippet do endereco sem os dados
 pub async fn show_endereco() -> Html<String> {
-    let template = EnderecoSnippetTemplate {
-        cep: "".to_string(),
-        rua: "".to_string(),
-        bairro: "".to_string(),
-        cidade: "".to_string(),
-        estado: "".to_string(),
-        ibge: "".to_string(),
-    }.render().map_err(|e| -> _ {
-        error!("Erro ao renderizar endereco snippet: {:?}", e);
-        Html("Erro ao renderizar endereco snippet".to_string())
-    }).expect("Erro ao renderizar endereco snippet");
+    let mut tera = Tera::default();
+    tera.add_template_file("templates/snippets/endereco_snippet.html", Some("endereco_snippet")).map_err(|e| {
+        error!("Failed to open template file: {:?}", e);
+        return Html("Failed to open template file".to_string())
+    }).expect("Failed to open template file");
+
+    let context = tera::Context::new();
+
+    let template = tera.render("endereco_snippet", &context).map_err(|e| -> _ {
+        error!("Failed to render endereco snippet: {:?}", e);
+        return Html("Failed to render endereco snippet".to_string())
+    }).expect("Failed to render endereco snippet");
 
     Html(template)
 }
@@ -143,6 +147,12 @@ pub async fn validate_cpf_cnpj(
     Query(cpf_cnpj): Query<CpfCnpjQuery>,
 ) -> Html<String> {
     debug!("Validating CPF/CNPJ: {:?}", cpf_cnpj.formatted_cpf_cnpj);
+    let mut tera = Tera::default();
+    tera.add_template_file("templates/cpf_cnpj_snippet.html", Some("cpf_cnpj"));
+    let mut context = tera::Context::new();
+    context.insert("cpf_cnpj", &cpf_cnpj.formatted_cpf_cnpj);
+
+
     match cpf_cnpj.tipo {
         TipoPessoa::PessoaFisica => {
             let formatted = cpf_cnpj.formatted_cpf_cnpj.parse::<Cpf>().map_err(|e| -> _
@@ -152,13 +162,12 @@ pub async fn validate_cpf_cnpj(
             })
             .expect("Failed to parse CPF").to_string();
 
-            let template = CpfCnpjTemplate {
-                formatted_cpf_cnpj: formatted,
-                cpf_cnpj: cpf_cnpj.formatted_cpf_cnpj,
-            }.render().map_err(|e| -> _ {
-                error!("Failed to render CPF snippet: {:?}", e);
-                return Html("Failed to render CPF snippet".to_string())
-            }).expect("Failed to render CPF snippet");
+            context.insert("formatted_cpf_cnpj", &formatted);
+
+            let template = tera.render("cpf_cnpj", &context).map_err(|e| -> _ {
+                error!("Failed to render CPF/CNPJ snippet: {:?}", e);
+                return Html("Failed to render CPF/CNPJ snippet".to_string())
+            }).expect("Failed to render CPF/CNPJ snippet");
 
             Html(template)
         },
@@ -170,21 +179,20 @@ pub async fn validate_cpf_cnpj(
             })
             .expect("Failed to parse CNPJ").to_string();
 
-            let template = CpfCnpjTemplate {
-                formatted_cpf_cnpj: formatted,
-                cpf_cnpj: cpf_cnpj.formatted_cpf_cnpj,
-            }.render().map_err(|e| -> _ {
-                error!("Failed to render CNPJ snippet: {:?}", e);
-                return Html("Failed to render CNPJ snippet".to_string())
-            }).expect("Failed to render CNPJ snippet");
+            context.insert("formatted_cpf_cnpj", &formatted);
+
+            let template = tera.render("cpf_cnpj", &context).map_err(|e| -> _ {
+                error!("Failed to render CPF/CNPJ snippet: {:?}", e);
+                return Html("Failed to render CPF/CNPJ snippet".to_string())
+            }).expect("Failed to render CPF/CNPJ snippet");
 
             Html(template)
         }
     }
 }
 
-#[derive(Template)]
-#[template(path = "snippets/endereco_snippet.html")]
+//#[derive(Template)]
+//#[template(path = "snippets/endereco_snippet.html")]
 struct EnderecoSnippetTemplate{
     cep: String,
     rua: String,

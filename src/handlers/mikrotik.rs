@@ -1,8 +1,8 @@
-use askama::Template;
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
 use radius::{create_mikrotik_radius, MikrotikNas};
 use serde::{Deserialize, Serialize};
+use tera::{Context, Tera};
 use time::PrimitiveDateTime;
 use tracing::{debug, error};
 use std::{net::Ipv4Addr,  str::FromStr, sync::Arc};
@@ -11,10 +11,17 @@ use sqlx::{prelude::FromRow, query, query_as, PgPool};
 use crate::handlers::{clients::Cliente, planos::Plano};
 
 pub async fn show_mikrotik_form() -> Html<String> {
-    let template = MikrotikFormTemplate.render().map_err(|e| {
-        error!("Failed to render Mikrotik form template: {:?}", e);
-        e
-    }).expect("Failed to render Mikrotik form template");
+    let mut tera = Tera::default();
+
+    tera.add_template_file("templates/mikrotik_add.html", Some("mikrotik add")).map_err(|e| {
+        error!("Failed to add template file: {:?}", e);
+        return Html("<p>Failed to add template file</p>".to_string())
+    }).expect("Failed to add template file");
+
+    let template = tera.render("mikrotik_add", &tera::Context::new()).map_err(|e| {
+        error!("Failed to render template: {:?}", e);
+        return Html("<p>Failed to render template</p>".to_string())
+    }).expect("Failed to render template");
 
     Html(template)
 }
@@ -181,13 +188,21 @@ pub async fn show_mikrotik_list(
             return Html("<p>Failed to fetch Mikrotik</p>".to_string())
         }).expect("Failed to fetch Mikrotik");
 
-    //Populate the template with the mikrotik instances
-    let template = MikrotikListTemplate {
-        mikrotik_options: mikrotik_list,
-    }.render().map_err(|e| -> _ {
-        error!("Failed to render Mikrotik list template: {:?}", e);
-        return Html("<p>Failed to render Mikrotik list template</p>".to_string())
-    }).expect("Failed to render Mikrotik list template");
+    let mut tera = Tera::default();
+
+    tera.add_template_file("templates/mikrotik_list.html", Some("mikrotik list")).map_err(|e| {
+        error!("Failed to add template file: {:?}", e);
+        return Html("<p>Failed to add template file</p>".to_string())
+    }).expect("Failed to add template file");
+
+    let mut context = tera::Context::new(); 
+    context.insert("mikrotik_options", &mikrotik_list);
+
+    let template = tera.render("mikrotik list", &context).map_err(|e| {
+        error!("Failed to render template: {:?}", e);
+        return Html("<p>Failed to render template</p>".to_string())
+    }).expect("Failed to render template");
+
 
     Html(template)
 }
@@ -197,7 +212,7 @@ pub async fn show_mikrotik_list(
 pub async fn show_mikrotik_edit_form(
     Path(id): Path<i32>,
     Extension(pool): Extension<Arc<PgPool>>,
-) -> Html<String> {
+) -> impl IntoResponse {
     //Find the edit instance on the db
     let mikrotik = query_as!(Mikrotik,"SELECT * FROM mikrotik WHERE id = $1",id)
         .fetch_one(&*pool)
@@ -207,15 +222,21 @@ pub async fn show_mikrotik_edit_form(
             return Html("<p>Failed to fetch Mikrotik</p>".to_string())
         }).expect("Failed to fetch Mikrotik");
 
-    //Populate the edit form template with the mikrotik data
-    let template = MikrotikEditTemplate {
-        mikrotik,
-    }.render().map_err(|e| -> _ {
-        error!("Failed to render Mikrotik edit template: {:?}", e);
-        return Html("<p>Failed to render Mikrotik edit template</p>".to_string())
-    }).expect("Failed to render Mikrotik edit template");
+    let mut tera = Tera::default();
+
+    tera.add_template_file("templates/mikrotik_edit.html", Some("mikrotik edit")).map_err(|e| {
+        error!("Erro ao adicionar mikrotik_list template a instancia do Tera {e}");
+    }).expect("Erro ao adicionar template ao tera");
+
+    let mut context = Context::new();
+    context.insert("mikrotik", &mikrotik);
+
+    let template = tera.render("mikrotik edit",&context).map_err(|e| {
+        error!("Falha ao renderizar template de edicao do mikrotik {:?}",e);
+    }).expect("falha ao renderizar mikrotik_edit template");
 
     Html(template)
+
 }
 
 //Gets the form with the edited mikrotik data
@@ -256,8 +277,8 @@ pub async fn update_mikrotik(
     Redirect::to("/mikrotik").into_response()
 }
 
-#[derive(Template)]
-#[template(path = "mikrotik_edit.html")]
+//#[derive(Template)]
+//#[template(path = "mikrotik_edit.html")]
 struct MikrotikEditTemplate {
     mikrotik: Mikrotik,
 }
@@ -273,8 +294,8 @@ pub struct Mikrotik {
     pub updated_at: Option<PrimitiveDateTime>,
 }
 
-#[derive(Template)]
-#[template(path = "mikrotik_add.html")]
+//#[derive(Template)]
+//#[template(path = "mikrotik_add.html")]
 struct MikrotikFormTemplate;
 
 
@@ -286,8 +307,8 @@ pub struct MikrotikDto {
     pub max_clientes: Option<i32>
 }
 
-#[derive(Template)]
-#[template(path = "mikrotik_list.html")]
+//#[derive(Template)]
+//#[template(path = "mikrotik_list.html")]
 struct MikrotikListTemplate {
     mikrotik_options: Vec<Mikrotik>,
 }

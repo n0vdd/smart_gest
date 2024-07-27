@@ -165,11 +165,6 @@ async fn main() {
         panic!("Failed to create radius plano bloqueado")
     }).expect("Failed to create radius plano bloqueado");
 
-    //prepara templates dos contratos
-    handlers::contrato::add_template(&pg_pool).await.map_err(|e| {
-        error!("Failed to prepare contrato templates: {:?}", e);
-        panic!("Failed to prepare contrato templates")
-    }).expect("Failed to prepare contrato templates");
 
     //BUG this is running all the time 
     tokio::spawn(scheduler(pg_pool.clone()));

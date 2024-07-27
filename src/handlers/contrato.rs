@@ -239,7 +239,7 @@ pub async fn add_template(pool: &PgPool) -> Result<(),anyhow::Error>{
 //Converte esse html temporario em um pdf na pasta do cliente 
 //adiciona nome/caminho e cliente responsavel pelo cliente ao banco de dados
 //Retorna um redirect do usuario para a listagem de clientes
-pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(cliente_id): Path<i32>) -> impl IntoResponse {
+pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(cliente_id): Path<i32>,) -> impl IntoResponse {
     //fetch cliente data
     let client = query_as!(
         ClienteContractData,
@@ -285,38 +285,15 @@ pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(clien
     //TODO There should be a better way to do this
     //Compara o nome da template para saber qual contrato sera gerado
     //Tenho que retornar uma tuple com 2 contratos devido a template fibra+voip(usa 2 contratos)
-    let template = match client.contrato_template_nome.as_str() {
-        "Contrato Fibra" => {
-            let template = ContratoPadraoFibra { client: client.clone() , data}.render().map_err(
-            |e| {
-                error!("Failed to render contract fibra template: {:?}", e);
-                anyhow!("Falha ao renderizar template de contrato para fibra")
-        }).expect("Erro ao renderizar contrato fibra");
-        (template,"".to_string())
-        },
-        "Contrato Fibra+Voip" => {
-            let template = ContratoPadraoFibraVoip { client: client.clone() , data:data.clone()}.render().map_err(|e| -> _ {
-            error!("Failed to render contract fibra+voip template: {:?}", e);
-            anyhow!("Falha ao renderizar template do contrato de fibra+voip")
-        }).expect("Erro ao renderizar contrato fibra+voip");
-            let template2 = ContratoPadraoVoip { client: client.clone() , data}
-            .render().map_err(|e| -> _ {
-                error!("Failed to render contract voip template: {:?}", e);
-                anyhow!("Falha ao renderizar template de contrato do voip")
-            }).expect("Erro ao renderizar contrato voip");
-            (template,template2)
-        },
-        "Contrato Voip" => {  
-            let template = ContratoPadraoVoip { client: client.clone() , data}
-            .render().map_err(|e| -> _ {
-                error!("Failed to render contract voip template: {:?}", e);
-                anyhow!("Falha ao renderizar template do contrato de voip")
-            }).expect("Erro ao renderizar contrato voip");
-            (template,"".to_string())
-        },
-        _ => return Html("<p>Invalid contract template</p>").into_response()
-    };
+    let template = Tera::new("templates/").expect("Failed to create Tera instance");
+    let mut context = Context::new();
+    context.insert("cliente", &client);
+    context.insert("date", &data);
 
+    let template = template.render(&client.contrato_template_nome, &context).map_err(|e| {
+        error!("Failed to render contrato template: {:?}", e);
+        anyhow!("Failed to render contrato template")
+    }).expect("Failed to render contrato template");
 
     //Cria o diretorio com o nome do cliente para salvar os contratos relacionados ao mesmo
     let dir_path = format!("contratos/{}", client.nome);
@@ -328,28 +305,10 @@ pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(clien
     // Save the rendered HTML to a temporary file
     let html_file_path = format!("/tmp/contract_{}.html", cliente_id);
 
-
-    //TODO there should be a better way to do this
-    //Checa se a template tem um contrato antes de salvar o mesmo para um arquivo
-    if template.0 != "" {
-        File::create(&html_file_path).await.map_err(|e| {
-            error!("Failed to create HTML file: {:?}", e);
-            anyhow!("Falha ao criar o arquivo html {html_file_path} para o contrato")
-        }).expect("Erro ao criar arquivo html")
-        .write_all(template.0.as_bytes()).await.map_err(|e| {
-            error!("Failed to write HTML to file: {:?}", e);
-            anyhow!("Falha ao escrever dados do template html para o arquivo temporario")
-        }).expect("Erro ao salvar html em arquivo");
-    } else if template.1 != "" {
-        File::create(&html_file_path).await.map_err(|e| {
-            error!("Failed to create HTML file: {:?}", e);
-            anyhow!("Falha ao criar o arquivo html {html_file_path} para o contrato")
-        }).expect("Erro ao criar arquivo html")
-        .write_all(template.1.as_bytes()).await.map_err(|e| {
-            error!("Failed to write HTML to file: {:?}", e);
-            anyhow!("Falha ao escrever dados do template html para o arquivo temporario")
-        }).expect("Erro ao salvar html em arquivo");
-    }  
+    tokio::fs::write(&html_file_path, template).await.map_err(|e| {
+        error!("Failed to write temporary HTML file: {:?}", e);
+        anyhow!("Falha ao escrever html temporario: {html_file_path}")
+    }).expect("Erro ao escrever html temporario");
 
     // Save the contract to the filesystem
     let pdf_file_path = format!("contratos/{}/{}-{}-{}.pdf", client.nome, client.contrato_template_nome, Local::now().to_string(),client.login);

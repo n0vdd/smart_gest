@@ -1,10 +1,10 @@
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
 use radius::{bloqueia_cliente_radius, add_cliente_radius, ClienteNas};
+use tera::Tera;
 use time::{macros::format_description, PrimitiveDateTime};
 use tracing::{debug, error};
 use validator::Validate;
 use std::fmt;
-use askama_axum::Template;
 use axum_extra::extract::Form;
 use cnpj::Cnpj;
 use cpf::Cpf;
@@ -166,7 +166,21 @@ pub async fn show_cliente_list(
             return Html("<p>Failed to fetch clients</p>".to_string())
         }).expect("Failed to fetch clients");
 
-    ClienteListTemplate { clients }
+    let mut tera = Tera::new("templates/*").expect("Failed to compile templates");
+    tera.add_template_file("templates/cliente_list.html", Some("cliente list")).map_err(|e| {
+        error!("Failed to add template file: {:?}", e);
+        return Html("<p>Failed to add template file</p>".to_string())
+    }).expect("Failed to add template file");
+
+    let mut context = tera::Context::new();
+    context.insert("clients", &clients);
+
+    let template = tera.render("cliente list", &context).map_err(|e| -> _ {
+        error!("Failed to render client list template: {:?}", e);
+        return Html("<p>Failed to render client list template</p>".to_string())
+    }).expect("Failed to render client list template");
+
+    Html(template)
 }
 
 /* TODO deal with edit form later
@@ -290,7 +304,6 @@ pub async fn update_cliente(
 pub async fn show_cliente_form(
     Extension(pool): Extension<Arc<PgPool>>,
 ) -> impl IntoResponse {
-
     let mikrotik_list = query_as!(Mikrotik, "SELECT * FROM mikrotik")
         .fetch_all(&*pool)
         .await
@@ -306,11 +319,23 @@ pub async fn show_cliente_form(
             debug!("Failed to fetch Planos: {:?}", e);
             Html("<p>Failed to fetch all Planos</p>".to_string())
         }).expect("Failed to fetch Planos");
+    
+    let mut tera = Tera::new("templates/*").expect("Failed to compile templates");
+    tera.add_template_file("templates/cliente_add.html", Some("cliente list")).map_err(|e| {
+        error!("Failed to add template file: {:?}", e);
+        return Html("<p>Failed to add template file</p>".to_string())
+    }).expect("Failed to add template file");
 
-    ClienteFormTemplate {
-        mikrotik_options: mikrotik_list,
-        plan_options: plan_list,
-    }
+    let mut context = tera::Context::new();
+    context.insert("mikrotik_options", &mikrotik_list);
+    context.insert("plan_options", &plan_list);
+
+    let template = tera.render("cliente_add", &context).map_err(|e| -> _ {
+        error!("Failed to render client form template: {:?}", e);
+        return Html("<p>Failed to render client form template</p>".to_string())
+    }).expect("Failed to render client form template");
+
+    Html(template)
 }
 
 //Gets the client data from the form
@@ -435,15 +460,15 @@ pub async fn register_cliente(
 
 // Templates
 
-#[derive(Template)]
-#[template(path = "cliente_add.html")]
+//#[derive(Template)]
+//#[template(path = "cliente_add.html")]
 struct ClienteFormTemplate {
     mikrotik_options: Vec<Mikrotik>,
     plan_options: Vec<Plano>,
 }
 
-#[derive(Template)]
-#[template(path = "cliente_list.html")]
+//#[derive(Template)]
+//#[template(path = "cliente_list.html")]
 struct ClienteListTemplate {
     clients: Vec<Cliente>,
 }

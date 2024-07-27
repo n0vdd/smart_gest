@@ -1,24 +1,24 @@
 use std::{str::FromStr, sync::Arc};
 
-use askama::Template;
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
 use radius::{create_radius_plano, PlanoRadiusDto};
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, query, query_as, PgPool};
+use tera::Tera;
 use time::PrimitiveDateTime;
 use tracing::error;
 
 use super::contrato::ContratoTemplate;
 
-#[derive(Template)]
-#[template(path = "plano_list.html")]
+//#[derive(Template)]
+//#[template(path = "plano_list.html")]
 struct PlanosListTemplate {
     planos: Vec<Plano>,
 }
 
-#[derive(Template)]
-#[template(path = "plano_edit.html")]
+//#[derive(Template)]
+//#[template(path = "plano_edit.html")]
 struct PlanoEditFormTemplate {
     plano: Plano,
     contracts: Vec<ContratoTemplate>,
@@ -59,7 +59,7 @@ pub async fn delete_plano(Extension(pool): Extension<Arc<PgPool>>,
 //Pega todos os planos criados na db
 //popula uma template com eles
 //retorna a listagem(template)
-pub async fn list_planos(Extension(pool): Extension<Arc<PgPool>>) -> Html<String> {
+pub async fn list_planos(Extension(pool): Extension<Arc<PgPool>>) -> impl IntoResponse {
     let planos = query_as!(
         Plano,
         "SELECT * FROM planos"
@@ -71,12 +71,25 @@ pub async fn list_planos(Extension(pool): Extension<Arc<PgPool>>) -> Html<String
         e
     }).expect("Erro ao buscar planos");
     
-    let template = PlanosListTemplate { planos }.render().map_err(|e| {
-        error!("Failed to render planos list template: {:?}", e);
+    let mut tera = Tera::new("templates/*").map_err(|e| {
+        error!("Failed to compile templates: {:?}", e);
         e
-    }).expect("Erro ao renderizar planos list template");
+    }).expect("Failed to compile templates");
 
-    Html(template)
+    tera.add_template_file("templates/plano_list.html", Some("plano list")).map_err(|e| {
+        error!("Failed to add plano list template: {:?}", e);
+        e
+    }).expect("Failed to add plano list template");
+
+    let mut context = tera::Context::new();
+    context.insert("planos", &planos);
+
+    let rendered = tera.render("plano list", &context).map_err(|e| {
+        error!("Failed to render plano list: {:?}", e);
+        e
+    }).expect("Failed to render plano list");
+
+    Html(rendered)
 }
 
 //Recebe os dados de edicao de um plano
@@ -129,18 +142,31 @@ pub async fn show_plano_edit_form(
 
     //Possivel selecionar qualquer uma das templates de contrato para ser usado pelo plano
     //Elas sao usadas ao criar um contrato para o cliente
-    let contracts = query_as!(ContratoTemplate, "SELECT * FROM contratos_templates")
+    let contratos = query_as!(ContratoTemplate, "SELECT * FROM contratos_templates")
         .fetch_all(&*pool)
         .await
         .map_err(|e| {
             error!("Failed to fetch contract templates: {:?}", e);
             return Html("<p>Failed to fetch contract templates</p>".to_string())
         }).expect("Erro ao buscar contratos");
-    
-    let template = PlanoEditFormTemplate { plano, contracts }.render().map_err(|e| {
-        error!("Failed to render plano edit form template: {:?}", e);
-        return Html("<p>Failed to render plano edit form template</p>".to_string())
-    }).expect("Erro ao renderizar plano edit form template");
+
+    let mut tera = Tera::new("templates/*").map_err(|e| {
+        error!("Failed to compile templates: {:?}", e);
+        return Html("<p>Failed to compile templates</p>".to_string())
+    }).expect("Failed to compile templates");
+    tera.add_template_file("templates/plano_edit.html", Some("plano edit")).map_err(|e| {
+        error!("Failed to add plano edit template: {:?}", e);
+        return Html("<p>Failed to add plano edit template</p>".to_string())
+    }).expect("Failed to add plano edit template");
+
+    let mut context = tera::Context::new();
+    context.insert("plano", &plano);
+    context.insert("contratos", &contratos);
+
+    let template = tera.render("plano edit", &context).map_err(|e| {
+        error!("Failed to render plano edit template: {:?}", e);
+        return Html("<p>Failed to render plano edit template</p>".to_string())
+    }).expect("Failed to render plano edit template");
 
     Html(template)
 }
@@ -151,19 +177,30 @@ pub async fn show_plano_edit_form(
 //renderiza a template e a retorna para o usuario
 pub async fn show_planos_form(Extension(pool): Extension<Arc<PgPool>>) -> Html<String> {
     //Usados para gerar o contrato do cliente posteriormente
-    let contracts= query_as!(ContratoTemplate, "SELECT * FROM contratos_templates")
+    let contratos= query_as!(ContratoTemplate, "SELECT * FROM contratos_templates")
         .fetch_all(&*pool)
         .await.map_err(|e| -> _ {
             error!("Failed to fetch contract templates: {:?}", e);
             return Html("<p>Failed to fetch contract templates</p>".to_string())
         }).expect("Failed to fetch contract templates");
 
-    let template = PlanosFormTemplate {
-        contracts,
-    }.render().map_err(|e| -> _ {
-        error!("Failed to render planos form template: {:?}", e);
-        return Html("<p>Failed to render planos form template</p>".to_string())
-    }).expect("Failed to render planos form template");
+    let mut tera = Tera::new("templates/*").map_err(|e| -> _ {
+        error!("Failed to compile templates: {:?}", e);
+        return Html("<p>Failed to compile templates</p>".to_string())
+    }).expect("Failed to compile templates");
+
+    tera.add_template_file("templates/plano_add.html", Some("plano add")).map_err(|e| -> _ {
+        error!("Failed to add plano add template: {:?}", e);
+        return Html("<p>Failed to add plano add template</p>".to_string())
+    }).expect("Failed to add plano add template");
+
+    let mut context = tera::Context::new();
+    context.insert("contratos", &contratos);
+
+    let template = tera.render("plano add", &context).map_err(|e| -> _ {
+        error!("Failed to render plano add template: {:?}", e);
+        return Html("<p>Failed to render plano add template</p>".to_string())
+    }).expect("Failed to render plano add template");
 
     Html(template)
 }
@@ -207,8 +244,8 @@ pub async fn register_plano(
     Redirect::to("/plano")
 }
 //need to show planos_form and register plano to db
-#[derive(Template)]
-#[template(path = "planos_add.html")]
+//#[derive(Template)]
+//#[template(path = "planos_add.html")]
 struct PlanosFormTemplate {
     contracts: Vec<ContratoTemplate>,
 }
