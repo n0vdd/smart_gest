@@ -1,0 +1,57 @@
+<!--this should be a form with a field for the name of the contrato template and a field for adding the contrato html template
+    there should be the templates that will be rendered like {{ date }} {{ cliente.nome }} etc...
+    for this struct 
+    struct ClienteContractData {
+        nome: String,
+        login: String,
+        rua: String,
+        numero: Option<String>,
+        complemento: Option<String>,
+        bairro: String,
+        cidade: String,
+        estado: String,
+        cep: String,
+        formatted_cpf_cnpj: String,
+        contrato_template_nome: String,
+    }
+-->
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Adicionar Template de Contrato</h1>
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-group row">
+            <label for="contrato_template_nome" class="col-sm-2 col-form-label">Nome do Contrato</label>
+            <div class="col-sm-10">
+                <input type="text" class="form-control" id="contrato_template_nome" name="contrato_template_nome" required>
+            </div> 
+
+        </div>
+        <div class="form-group row">
+            <label for="contrato_template_html" class="col-sm-2 col-form-label">Contrato</label>
+            <div class="col-sm-10">
+                <textarea class="form-control" id="contrato_template_html" name="contrato_template_html" required></textarea>
+            </div>
+        </div>
+        <!-- here there should be the {{ templates }} the user can use-->
+        <div class="form-group row">
+            <label for="contrato_template_html" class="col-sm-2 col-form-label">Templates</label>
+            <div class="col-sm-10">
+                <ul>
+                    <li>{{ date }}</li>
+                    <li>{{ cliente.nome }}</li>
+                    <li>{{ cliente.login }}</li>
+                    <li>{{ cliente.rua }}</li>
+                    <li>{{ cliente.numero }}</li>
+                    <li>{{ cliente.complemento }}</li>
+                    <li>{{ cliente.bairro }}</li>
+                    <li>{{ cliente.cidade }}</li>
+                    <li>{{ cliente.estado }}</li>
+                    <li>{{ cliente.cep }}</li>
+                    <li>{{ cliente.formatted_cpf_cnpj }}</li>
+                </ul>
+            </div>
+        <button type="submit" class="btn btn-primary">Adicionar</button>
+    </form>
+{% endblock %}

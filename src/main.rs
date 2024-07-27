@@ -9,22 +9,19 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::{delete, put};
 use axum::{Router, routing::get, routing::post, extract::Extension};
-use axum_extra::extract::Form;
 use chrono::{Datelike, Utc};
 use cron::Schedule;
 use db::create_postgres_pool;
-use handlers::clients::{delete_cliente, get_all_clientes, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
+use handlers::clients::{bloqueia_clientes_atrasados, delete_cliente,  register_cliente, show_cliente_form, show_cliente_list, update_cliente};
 use handlers::contrato::generate_contrato;
-use handlers::dici::{generate_dici, generate_dici_month_year, show_dici_list, GenerateDiciForm};
+use handlers::dici::{generate_dici, generate_dici_month_year, show_dici_list};
 use handlers::mikrotik::{delete_mikrotik, failover_mikrotik_script, failover_radius_script, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
 use once_cell::sync::Lazy;
-use radius::radius::{bloqueia_cliente, create_radius_cliente_pool, create_radius_plano_bloqueado};
+use radius::{create_radius_cliente_pool, create_radius_plano_bloqueado};
 use services::webhooks::webhook_handler;
-use sqlx::{query, PgPool};
-use time::macros::format_description;
-use time::PrimitiveDateTime;
+use sqlx::PgPool;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
@@ -122,31 +119,10 @@ async fn scheduler(pool: Arc<PgPool>) {
                 }).expect("Erro ao gerar dici");
             }
             12 => {
-                let clientes = get_all_clientes(&*pool).await.map_err(|e| {
-                    error!("Failed to fetch clientes: {:?}", e);
-                    anyhow!("Failed to fetch all clientes")
-                }).expect("Erro ao buscar clientes");
-
-                for cliente in clientes {
-                    //TODO check the cliente_id inside the payment confirmed for the current month
-                    //Format chrono to primitiveDateTive
-                    let format = format_description!("[day]_[month]_[year]_[hour]:[minute]:[second].[subsecond]");
-                    let date = PrimitiveDateTime::parse(chrono::Utc::now().to_string().as_str(), format).expect("Erro ao formatar data");
-
-                    //BUG maybe the way i am cheking the date is not the best
-                    let payment = query!("SELECT * FROM payment_confirmed where cliente_id = $1 and created_at >= $2 and created_at <= $3",cliente.id,date,date)
-                        .fetch_optional(&*pool).await.map_err(|e| {
-                            error!("Failed to fetch payment_confirmed: {:?}", e);
-                            anyhow!("Failed to fetch all payment_confirmed")
-                    }).expect("Erro ao buscar payment_confirmed");
-
-                    if payment.is_none() {
-                        bloqueia_cliente(&cliente.login).await.map_err(|e| {
-                            error!("Failed to block cliente: {:?}", e);
-                            anyhow!("Failed to block cliente")
-                        }).expect("Erro ao bloquear cliente");
-                    }
-                }
+                bloqueia_clientes_atrasados(&pool).await.map_err(|e| {
+                    error!("Failed to block overdue clients: {:?}", e);
+                    anyhow!("Failed to block overdue clients")
+                }).expect("Erro ao bloquear clientes atrasados");
             }
             _ => {
                 error!("Unexpected day: {}", day);
@@ -261,6 +237,7 @@ async fn main() {
     }).expect("erro ao criar listener");
 
     info!("Listening on {}", addr);
+    //This is not https
     axum::serve(listener,app.into_make_service_with_connect_info::<SocketAddr>()).await
     .map_err(|e| -> _ {
         error!("erro ao iniciar o servidor: {:?}", e);

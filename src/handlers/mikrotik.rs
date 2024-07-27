@@ -1,7 +1,7 @@
 use askama::Template;
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
-use radius::radius::{create_mikrotik_radius, MikrotikNas};
+use radius::{create_mikrotik_radius, MikrotikNas};
 use serde::{Deserialize, Serialize};
 use time::PrimitiveDateTime;
 use tracing::{debug, error};
@@ -20,29 +20,8 @@ pub async fn show_mikrotik_form() -> Html<String> {
 }
 
 //Create the script for pasting onto mikrotik with html template?
-//TODO return the complete script for mikrotik faiolver
-//Based on this:
-/*/system scheduler add interval=45m name=ler_pppoe on-event=":execute script=ler_pppoe;"
-/system script add name=ler_pppoe source="#===============================\r\
-    \n:global RADIUSIP \"This.Ip\"; \r\
-
-    Maybe i dont need this login and password
-    \n:global USER \"User_e76f08163bba500761c211cc466c8c04\"; \r\
-    \n:global PASS \"Pass_aef8067ca4ceed0d38d94d147a21a3eb0f266225\"; \r\
-    \n:global done \"\";\r\
-
-    //Fetch the script from the controller server
-    //TODO redo the uris of the failover logic
-    \n/tool fetch user=\$USER password=\$PASS url=\"https://\$RADIUSIP/mikrotik/:id/failover\" dst-path=mkt_pppoe.rsc;\r\
-    \n:set done \"true\";\r\
-    \n\r\
-    \n:if ( [/file find name=mkt_pppoe.rsc] != \"\" ) do={\r\
-    \n   :log warning \"Importando PPPoE\";\r\
-    \n   /import mkt_pppoe.rsc;\r\
-    \n   /file remove mkt_pppoe.rsc;\r\
-    \n}\r\
-    \n" */
 //TODO return inside a html side pane or some shit, with a copy button
+//Create a modal for displaying this script with a option for copiying
 pub async fn failover_mikrotik_script(Path(id):Path<i32>) -> impl IntoResponse {
     let mut script = String::new();
     let ip = local_ip_address::local_ip().map_err(|e| {
@@ -74,7 +53,6 @@ global done "";
 ///and so that everyone know that it was created by this system
 ///param: mikrotik id to get the associated clientes
 ///param: Db connection for the logic(getting all the planos,linking clientes to mikrotik)
-//TODO make this be run after every added cliente would be safer(every 45 minute aswell,because this migth not be doable)
 pub async fn failover_radius_script(Path(mikrotik_id):Path<i32>,Extension(pool):Extension<Arc<PgPool>>) -> impl IntoResponse {
     //Get all the planos
     let planos = query_as!(Plano,"SELECT * FROM planos")
@@ -102,11 +80,6 @@ pub async fn failover_radius_script(Path(mikrotik_id):Path<i32>,Extension(pool):
 
     for plano in &planos {
         debug!("adicionando plano ao script: {:?}",plano);
-        //TODO criar planos com kbs, terei que alterar aqui
-        //sera util para planos de bloqueio e afins(nao sei se seria necessario)
-        //?acho que o unico jeito viavel do radius bloquear os clientes?
-        //deveria ter como desativar eles, nao faz sentido deixar em um plano sem nada, se posso so nao deixar ele conectado
-
         //add profiles
         commands.push_str(format!(r#"/ppp/profile/add name="{}" rate-limit={}m/{}m only-one=yes comment="smart_gest"
         "#,
@@ -115,7 +88,7 @@ pub async fn failover_radius_script(Path(mikrotik_id):Path<i32>,Extension(pool):
 
     for cliente in &clientes {
         debug!("adicionando cliente ao script: {:?}",cliente);
-        let plano_name = planos.iter().find(|plano| plano.id == cliente.plano_id.expect("impossivel achar plano"))
+        let plano_name = planos.iter().find(|plano| plano.id == cliente.plano_id)
             .map(|plano_name| { plano_name.nome.clone() })
             .expect("impossivel achar plano");
 
@@ -294,7 +267,6 @@ pub struct Mikrotik {
     pub id: i32,
     pub nome: String,
     pub ip: String,
-    //TODO maybe store this as a hash, have to think if its viable
     pub secret: String,
     pub max_clientes: Option<i32>, 
     pub created_at: Option<PrimitiveDateTime>,

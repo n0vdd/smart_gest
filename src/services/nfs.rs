@@ -15,7 +15,7 @@ const ID_CNAE: &str = "117019000";
 const DESCRICAO: &str = "Serviço de internet";
 
 
-use fantoccini::{client, Client, ClientBuilder, Locator};
+use fantoccini::{Client, ClientBuilder, Locator};
 use tracing::{debug, error};
 
 use crate::handlers::clients::Cliente;

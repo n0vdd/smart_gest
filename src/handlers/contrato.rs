@@ -1,37 +1,31 @@
-//TODO one handler will show a form for uploading the contract html with its name
-
 use std::sync::Arc;
 
 use anyhow::{anyhow, Ok};
-use askama::Template;
 use axum::{extract::Path, response::{IntoResponse, Redirect}, Extension};
-use axum_extra::response::Html;
+use axum_extra::{extract::Form, response::Html};
 use chrono::{Datelike, Local};
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, query, query_as, PgPool};
+use tera::{Context, Tera};
 use tokio::{fs::{DirBuilder, File}, io::AsyncWriteExt, process::Command};
 use tracing::error;
 
-
-
-//TODO criar modelo de dados usados para gerar o contrato
-//terei que buscar como um subset dos dados do cliente(posso pegar pela db)
-#[derive(Template)]
-#[template(path = "contratos/contrato_padrao_fibra.html")]
+//#[derive(Template)]
+//#[template(path = "contratos/contrato_padrao_fibra.html")]
 pub struct ContratoPadraoFibra {
     client: ClienteContractData,
     data: String
 }
 
-#[derive(Template)]
-#[template(path = "contratos/contrato_padrao_fibra+voip.html")]
+//#[derive(Template)]
+//#[template(path = "contratos/contrato_padrao_fibra+voip.html")]
 pub struct ContratoPadraoFibraVoip {
     client: ClienteContractData,
     data: String
 }
 
-#[derive(Template)]
-#[template(path = "contratos/contrato_padrao_voip.html")]
+//#[derive(Template)]
+//#[template(path = "contratos/contrato_padrao_voip.html")]
 pub struct ContratoPadraoVoip {
     client: ClienteContractData,
     data: String,
@@ -42,10 +36,6 @@ struct ClienteContractData {
     id: i32,
     nome: String,
     login: String,
-    //TODO display endereco is used here
-    //could do a serde flaten ?
-    //or just use the fields
-    //will need to deal with option either way
     rua: String,
     numero: Option<String>,
     complemento: Option<String>,
@@ -80,7 +70,7 @@ struct ContratoDto {
 #[derive(Debug,FromRow)]
 struct ContratoTemplateDto {
     nome: String,
-    path: String
+    data: String
 }
 
 #[derive(Serialize,Deserialize,Debug,FromRow)]
@@ -90,10 +80,107 @@ pub struct ContratoTemplate {
     pub path: String,
 }
 
+pub async fn show_contrato_template_list(Extension(pool): Extension<Arc<PgPool>>) -> impl IntoResponse {
+    let templates = query_as!(ContratoTemplate, "SELECT * FROM contratos_templates")
+        .fetch_all(&*pool)
+        .await.map_err(|e| {
+            error!("Failed to fetch contrato templates: {:?}", e);
+            anyhow!("Failed to fetch contrato templates")
+        }).expect("Failed to fetch contrato templates");
+
+    let mut context = Context::new();
+    context.insert("templates", &templates);
+
+    let rendered = Tera::new("templates/").expect("Failed to create Tera instance")
+        .render("contrato_template_list.html", &context)
+        .map_err(|e| {
+            error!("Failed to render contrato template list: {:?}", e);
+            anyhow!("Failed to render contrato template list")
+        }).expect("Failed to render contrato template list");
+
+    Html(rendered)
+}
+
+//in the bottom of the form it should show what data can be used on the template like 
+//{{ date }} {{ cliente.nome }} etc,etc
+pub async fn show_contrato_template_add_form() -> impl IntoResponse {
+    let rendered = Tera::new("templates/").expect("Failed to create Tera instance")
+        .render("contrato_template_add_form.html", &Context::new())
+        .map_err(|e| {
+            error!("Failed to render contrato template add form: {:?}", e);
+            anyhow!("Failed to render contrato template add form")
+        }).expect("Failed to render contrato template add form");
+
+    Html(rendered)
+}
+
+pub async fn show_contrato_template_edit_form(Extension(pool):Extension<Arc<PgPool>>,Path(id):Path<i32>) -> impl IntoResponse {
+    let template = query_as!(ContratoTemplate,"SELECT * FROM contratos_templates WHERE id = $1", id)
+        .fetch_one(&*pool)
+        .await.map_err(|e| {
+            error!("Failed to fetch contrato template: {:?}", e);
+            anyhow!("Failed to fetch contrato template")
+        }).expect("Failed to fetch contrato template");
+
+    let data = tokio::fs::read(&template.path).await.map_err(|e| {
+        error!("Failed to read template file: {:?}", e);
+        anyhow!("Failed to read template file")
+    }).expect("Failed to read template file");
+    let data = String::from_utf8(data).map_err(|e| {
+        error!("Failed to convert template data to string: {:?}", e);
+        anyhow!("Failed to convert template data to string")
+    }).expect("Failed to convert template data to string");
+
+    let mut context = Context::new();
+    //This should be a string i think
+    context.insert("data", &data);
+    context.insert("template", &template);
+
+    let rendered = Tera::new("templates/").expect("Failed to create Tera instance")
+        .render("contrato_template_edit_form.html",&context)
+        .map_err(|e| {
+            error!("Failed to render contrato template edit form: {:?}", e);
+            anyhow!("Failed to render contrato template edit form")
+        }).expect("Failed to render contrato template edit form");
+
+    Html(rendered)
+}
+
+//Save the path and name of the template used to generate the contract to the db
+//save the template itself to path
+pub async fn add_contrato_template(Extension(pool):Extension<Arc<PgPool>>,
+    Form(template): Form<ContratoTemplateDto>) -> impl IntoResponse {
+    //Save the template to the filesystem
+    let path = format!("templates/contratos/{}", template.nome);
+
+    File::create(&path).await.map_err(|e| {
+        error!("Failed to create template file: {:?}", e);
+        anyhow!("Failed to create template file")
+    }).expect("Failed to create template file")
+    .write_all(template.data.as_bytes()).await.map_err(|e| {
+        error!("Failed to write template data to file: {:?}", e);
+        anyhow!("Failed to write template data to file")
+    }).expect("Failed to write template data to file");
+
+    query!(
+        "INSERT INTO contratos_templates (nome, path) VALUES ($1, $2)",
+        template.nome,
+        path
+    ).execute(&*pool).await.map_err(|e| {
+        error!("Failed to save template to database: {:?}", e);
+        anyhow!("Failed to save template to database")
+    }).expect("Failed to save template to database");
+
+    Redirect::to("/contrato")
+}
+
 //Adiciona as templates usadas para gerar os contratos ao banco de dados
 //Apenas caso as mesmas ainda nao existam no banco
 //Sao valores hard_coded
 //TODO talvez possa fazer isso pelo sistema, mas acho que ficaria mais trabalhoso no momento
+//TODO criar templates pelo sistema vai envolver criar templates do askama e coisas do tipo
+//nao sei o quanto seria viavel, mas seria necessario, talvez consigar criar trais e afins, sla
+/* 
 pub async fn add_template(pool: &PgPool) -> Result<(),anyhow::Error>{
     let templates = vec![
         ContratoTemplateDto {
@@ -138,7 +225,7 @@ pub async fn add_template(pool: &PgPool) -> Result<(),anyhow::Error>{
     }
     Ok(())
 }
-
+*/
 //It should be saved to a temp html and then converted to pdf
 //will receive the cliente_id from path
 //will need to get the cliente plano to get the template it uses(there is no need for the match)

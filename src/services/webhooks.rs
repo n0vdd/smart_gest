@@ -2,14 +2,14 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use axum::{http::{self}, response::IntoResponse, Extension, Json};
-use chrono::{Datelike,  Local};
-use radius::radius::{bloqueia_cliente, checa_cliente_bloqueado, desbloqueia_cliente};
+use chrono::{format, Date, Datelike, Local, Month, NaiveTime};
+use radius::{bloqueia_cliente_radius, checa_cliente_bloqueado_radius, desbloqueia_cliente};
 use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as, PgPool};
 use time::macros::format_description;
 use tracing::{debug, error};
 
-use crate::{handlers::{clients::{Cliente, ClienteDto}, planos::find_plano_by_cliente}, services::nfs::gera_nfs};
+use crate::{handlers::{clients::{Cliente, ClienteDto}, planos::{find_plano_by_cliente, Plano, TipoPagamento}}, services::nfs::gera_nfs};
 
 ///!this is the api key for the sandbox, it should be set on the env for production
 const API_KEY: &str = "$aact_YTU5YTE0M2M2N2I4MTliNzk0YTI5N2U5MzdjNWZmNDQ6OjAwMDAwMDAwMDAwMDAwODUzNzI6OiRhYWNoXzAzYTI4MDhmLWI0NmItNDliNC1hNTIwLTRkNWUzZDBjNTQxZg==";
@@ -103,7 +103,7 @@ pub async fn webhook_handler(
             anyhow::anyhow!("Erro ao buscar cliente no sistema asaas")
          }).expect("Erro ao buscar cliente");
 
-         if checa_cliente_bloqueado(&cliente.nome).await.map_err(|e| {
+         if checa_cliente_bloqueado_radius(&cliente.nome).await.map_err(|e| {
             error!("Failed to check if client is blocked: {:?}", e);
             anyhow!("Erro ao checar se o cliente esta bloqueado")
          }).expect("Erro ao checar se o cliente esta bloqueado") {
@@ -134,7 +134,7 @@ pub async fn webhook_handler(
 
                gera_nfs(&cliente,webhook_data.payment_data.net_value).await;
 
-               if checa_cliente_bloqueado(&cliente.nome).await.map_err(|e| {
+               if checa_cliente_bloqueado_radius(&cliente.nome).await.map_err(|e| {
                   error!("Failed to check if client is blocked: {:?}", e);
                   anyhow!("Erro ao checar se o cliente esta bloqueado")
                }).expect("Erro ao checar se o cliente esta bloqueado") {
@@ -153,6 +153,9 @@ pub async fn webhook_handler(
                //TODO mandar algum aviso e logar, nao deveria nem chegar nesse flow
                //so vendemoos boleto, cartao de credito e pix
                error!("Tipo de pagamento nao suportado: {:?}", webhook_data.payment_data.billing_type);
+
+               //TODO enviar notificao pelo telegram
+//               reqwest::Client::new().get(url)
             }
          }
 
@@ -166,15 +169,14 @@ pub async fn webhook_handler(
 
       Event::PaymentRefunded => {
          //TODO cancelar nota fiscal de servico
-         if Local::now().day() > 12 {
-            // TODO: block client in radius
+         if Local::now().day() >= 12 {
             let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
                error!("Failed to fetch client: {:?}", e);
                anyhow!("Erro ao buscar cliente no sistema asaas")
             }).expect("Erro ao buscar cliente");
 
             if let Some(login) = cliente.login {
-               bloqueia_cliente(&login).await.map_err(|e| {
+               bloqueia_cliente_radius(&login).await.map_err(|e| {
                   error!("Failed to block client: {:?}", e);
                   anyhow!("Erro ao bloquear cliente no servidor radius")
                }).expect("Erro ao bloquear cliente");
@@ -185,15 +187,14 @@ pub async fn webhook_handler(
       }, 
 
       Event::PaymentRefundInProgress => {
-         if Local::now().day() > 12 {
-            // TODO: block client in radius
+         if Local::now().day() >= 12 {
             let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
                error!("Failed to fetch client: {:?}", e);
                anyhow!("Erro ao buscar cliente no sistema asaas")
             }).expect("Erro ao buscar cliente");
 
             if let Some(login) = cliente.login {
-               bloqueia_cliente(&login).await.map_err(|e| {
+               bloqueia_cliente_radius(&login).await.map_err(|e| {
                   error!("Failed to block client: {:?}", e);
                   anyhow!("Erro ao bloquear cliente no servidor radius")
                }).expect("Erro ao bloquear cliente");
@@ -241,10 +242,14 @@ struct ClientePost{
    #[serde(rename = "cpfCnpj")]
    cpf_cnpj: String,
    #[serde(rename = "mobilePhone")]
-   mobile_phone:String
+   mobile_phone:String,
+   #[serde(rename = "postalCode")]
+   postal_code: String,
+   #[serde(rename = "addressNumber")]
+   address_number: String
 }
 
-pub async fn add_cliente_to_asaas(cliente:&ClienteDto) -> Result<(), anyhow::Error> {
+pub async fn add_cliente_to_asaas(cliente:&ClienteDto,plano:&Plano) -> Result<(), anyhow::Error> {
    let client = reqwest::Client::new();
    
    let url = format!("https://sandbox.asaas.com/api/v3/customers/");
@@ -271,29 +276,105 @@ pub async fn add_cliente_to_asaas(cliente:&ClienteDto) -> Result<(), anyhow::Err
       .data.iter().find(|cl| cl.name == cliente.nome).map(|name| {
          debug!("Cliente ja existe: {:?}",name);
          //Caso o cliente ja exista nao ha necessidade de crialo
-         return
+         anyhow::anyhow!("Cliente ja existe no sistema do asaas")
       });
 
    let post_cliente = ClientePost {
       name: cliente.nome.clone(),
       email: cliente.email.clone(),
       cpf_cnpj: cliente.cpf_cnpj.clone(),
-      mobile_phone: cliente.telefone.clone()
+      mobile_phone: cliente.telefone.clone(),
+      postal_code: cliente.endereco.cep.clone(),
+      address_number: cliente.endereco.numero.clone().unwrap()
    };
 
 
    //Envia o cliente caso ele nao exista
-   client.post(&url).header("access_token",API_KEY)
+   let asaas_cliente = client.post(&url).header("access_token",API_KEY)
       .header("accept", "application/json")
       .header("content-type", "application/json")
       .header("user-agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
       .json(&post_cliente).send().await.map_err(|e| {
          error!("Failed to post client: {:?}", e);
          anyhow::anyhow!("Erro ao enviar cliente para sistema do asaas")
+      })?.json::<ClienteApi>().await.map_err(|e| {
+         error!("Failed to parse client: {:?}", e);
+         anyhow::anyhow!("Erro ao realizar parse do cliente")
+      })?;
+
+      add_assinutara_cliente_asaas(&asaas_cliente,plano).await.map_err(|e| {
+         error!("Failed to add subscription: {:?}", e);
+         anyhow::anyhow!("Erro ao adicionar assinatura ao cliente")
       })?;
 
    Ok(())
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Assinatura {
+   billing_type: TipoPagamento,
+   interest: Interest,
+   fine: Fine,
+   cycle: String,
+   value: f32,
+   customer: String,
+   #[serde(rename = "nextDueDate")]
+   next_due_date: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Fine {
+   value: f32,
+   #[serde(rename = "type")]
+   fine_type: String,
+}  
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Interest {
+   value: f32,
+}
+
+async fn add_assinutara_cliente_asaas(cliente_asaas:&ClienteApi,plano:&Plano) -> Result<(),anyhow::Error>{
+   let month = Local::now().month();
+   let year = Local::now().year();
+   //Smartcom comeca a cobrar 3 meses depois, sempre no dia 5
+   let next_due_date= format!("{}-{}-5",year,month+3);
+
+   let url = "https://sandbox.asaas.com/api/v3/subscriptions";
+
+   let client = reqwest::Client::new().post(url)
+   .header("accept", "application/json")
+   .header("content-type", "application/json")
+   .header("user-agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
+
+   let assinatura = Assinatura {
+      billing_type: plano.tipo_pagamento.clone(),
+      //TODO deveria ser definido pelo plano
+      interest: Interest {
+         value: 1.0
+      },
+      //TODO deveria ser definido pelo plano
+      fine: Fine {
+         value: 2.0,
+         fine_type: "PERCENTAGE".to_string()
+      },
+      //Pagamento de internet costuma ser mensal
+      //TODO deveria ser definido ao criar o plano
+      cycle: "MONTHLY".to_string(),
+      value: plano.valor,
+      customer: cliente_asaas.id.clone(),
+      next_due_date
+   };
+
+   //save assinatura to the asaas system
+   client.json(&assinatura).send().await.map_err(|e| {
+      error!("Failed to post subscription: {:?}", e);
+      anyhow::anyhow!("Erro ao enviar assinatura para o sistema do asaas")
+   })?;
+
+   Ok(())
+
+} 
 
 async fn check_if_payment_exists(id: &str, table: &str, pool: &PgPool) -> Result<bool,anyhow::Error> {
    //All payments have a event_id related to it

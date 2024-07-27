@@ -1,10 +1,10 @@
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
-use radius::radius::{add_cliente_radius, ClienteNas};
-use time::{Date, PrimitiveDateTime};
+use radius::{bloqueia_cliente_radius, add_cliente_radius, ClienteNas};
+use time::{macros::format_description, PrimitiveDateTime};
 use tracing::{debug, error};
 use validator::Validate;
 use std::fmt;
-use askama::Template;
+use askama_axum::Template;
 use axum_extra::extract::Form;
 use cnpj::Cnpj;
 use cpf::Cpf;
@@ -28,10 +28,9 @@ pub struct ClienteDto {
     #[serde(flatten)]
     pub endereco: EnderecoDto,
     pub telefone: String,
-    //TODO this is not optional, should not be on db aswell
     pub login: String,
     pub senha: String,
-    pub mikrotik_id: Option<i32>,
+    pub mikrotik_id: i32,
     pub plano_id: i32,
     pub contrato_id: Option<Vec<i32>>
 }
@@ -59,11 +58,8 @@ pub struct Cliente {
     pub login: Option<String>,
     //TODO convert this on cliente_edit.html
     pub senha: Option<String>,
-    //TODO this should not be optional
-    //The only 2 i32
-    //they are commented out in the html now
-    pub mikrotik_id: Option<i32>,
-    pub plano_id: Option<i32>,
+    pub mikrotik_id: i32,
+    pub plano_id: i32,
     // pub contrato_id: Option<Vec<i32>>
     pub created_at: Option<PrimitiveDateTime>,
     pub updated_at: Option<PrimitiveDateTime>,
@@ -142,12 +138,11 @@ impl<'r> Decode<'r, Postgres> for TipoPessoa {
 
 pub struct SimpleCliente {
     pub id: i32,
-    pub nome: String,
     pub login: String
 }
 
-pub async fn get_all_clientes(pool: &PgPool) -> Result<Vec<SimpleCliente>, anyhow::Error> {
-    query_as!(SimpleCliente, "SELECT id,nome,login FROM clientes")
+async fn get_all_clientes(pool: &PgPool) -> Result<Vec<SimpleCliente>, anyhow::Error> {
+    query_as!(SimpleCliente, "SELECT id,login FROM clientes")
         .fetch_all(pool)
         .await.map_err(|e|{
             error!("Failed to fetch clients: {:?}", e);
@@ -162,7 +157,7 @@ pub async fn get_all_clientes(pool: &PgPool) -> Result<Vec<SimpleCliente>, anyho
 //return the client list
 pub async fn show_cliente_list(
     Extension(pool): Extension<Arc<PgPool>>,
-) -> Html<String> {
+) -> impl IntoResponse {
     let clients = query_as!(Cliente, "SELECT * FROM clientes")
         .fetch_all(&*pool)
         .await
@@ -171,14 +166,7 @@ pub async fn show_cliente_list(
             return Html("<p>Failed to fetch clients</p>".to_string())
         }).expect("Failed to fetch clients");
 
-    let template = ClienteListTemplate { clients }
-        .render()
-        .map_err(|e| -> _ {
-            error!("Failed to render client list template: {:?}", e);
-            return Html("<p>Failed to render client list template</p>".to_string())
-        }).expect("Failed to render client list template");
-
-    Html(template)
+    ClienteListTemplate { clients }
 }
 
 /* TODO deal with edit form later
@@ -301,7 +289,7 @@ pub async fn update_cliente(
 //Returns the form to the user
 pub async fn show_cliente_form(
     Extension(pool): Extension<Arc<PgPool>>,
-) -> Html<String> {
+) -> impl IntoResponse {
 
     let mikrotik_list = query_as!(Mikrotik, "SELECT * FROM mikrotik")
         .fetch_all(&*pool)
@@ -319,29 +307,18 @@ pub async fn show_cliente_form(
             Html("<p>Failed to fetch all Planos</p>".to_string())
         }).expect("Failed to fetch Planos");
 
-    let template = ClienteFormTemplate {
+    ClienteFormTemplate {
         mikrotik_options: mikrotik_list,
         plan_options: plan_list,
-    }.render()
-    .map_err(|e| -> _ {
-        error!("Failed to render cliente form template: {:?}", e);
-        return Html("<p>Failed to render cliente form template</p>".to_string())
-    }).expect("Failed to render cliente form template");
-
-    Html(template)
+    }
 }
 
 //Gets the client data from the form
 //Validates the cpf or cnpj(Based on the TipoPessoa selected on the form),pessoa fisica validates cpf and juridica validates cnpj
 //salva uma versao formatada e uma nao formatada do cpf/cnpj(Para uso em nota fiscal)
 //salva a cliente para o sistema de gestao financeira asaas(facilita para gerar a assinatura do cliente)
-
-//TODO possivel criar a assinatura do cliente ja neste momento, porem nao sei se ja deveria deixar isso automatizado
-//porem usando o plano do cliente consigo criar a assinatura do mesmo
-
 //retorna um redirect do usuario para a lista de clientes
 //this can be a source of errors on the cliente side pela falta de atencao
-//TODO deal with the validation of the cpf/cnpj on the frontend
 pub async fn register_cliente(
     Extension(pool): Extension<Arc<PgPool>>,
     Form(mut client): Form<ClienteDto>,
@@ -412,8 +389,6 @@ pub async fn register_cliente(
         client.telefone,
         //login e senha usado para controle de acesso pelo radius
         client.login,
-        //TODO senhar ser salva em plaintext nao e legal
-        //Nao sei se teria como salvala de outra forma
         client.senha,
         client.mikrotik_id,
         client.plano_id,
@@ -426,28 +401,28 @@ pub async fn register_cliente(
         client.endereco.estado,
         client.endereco.ibge
     )
-    .execute(&*pool)
-    .await
-    .map_err(|e| {
+    .execute(&*pool).await.map_err(|e| {
         error!("Failed to insert client: {:?}", e);
         return Html("Failed to save the client")
     }).expect("Failed to insert client");
 
-    add_cliente_to_asaas(&client).await.expect("Failed to add client to asaas");
+    let plano= query_as!(Plano,"SELECT * FROM planos WHERE id = $1", client.plano_id)
+    .fetch_one(&*pool).await
+    .map_err(|e| {
+        error!("Failed to fetch plan name: {:?}", e);
+        return Html("Failed to fetch plan name")
+    }).expect("Failed to fetch plan name");
 
-    let plano_nome = query!("SELECT nome FROM planos WHERE id = $1", client.plano_id)
-        .fetch_one(&*pool)
-        .await
-        .map_err(|e| {
-            error!("Failed to fetch plan name: {:?}", e);
-            return Html("Failed to fetch plan name")
-        }).expect("Failed to fetch plan name")
-        .nome;
+    //Cria cliente e assinatura no radius
+    add_cliente_to_asaas(&client,&plano).await.map_err(|e| {
+        error!("Failed to add client to asaas: {:?}", e);
+        return Html("Failed to add client to asaas")
+    }).expect("Failed to add client to asaas");
 
     let cliente_radius = ClienteNas {
         username: client.login,
         password: client.senha,
-        plano_nome
+        plano_nome: plano.nome,
     };
 
     add_cliente_radius(cliente_radius).await.map_err(|e| {
@@ -520,4 +495,33 @@ pub async fn fetch_tipo_clientes_before_date(
         }).collect();
 
     Ok(tipos)
+}
+
+pub async fn bloqueia_clientes_atrasados(pool: &PgPool) -> Result<(),anyhow::Error>{
+    let clientes = get_all_clientes(&*pool).await.map_err(|e| {
+        error!("Failed to fetch clientes: {:?}", e);
+        anyhow::anyhow!("Failed to fetch all clientes")
+    }).expect("Erro ao buscar clientes");
+
+    for cliente in clientes {
+        //Format chrono to primitiveDateTive
+        let format = format_description!("[day]_[month]_[year]_[hour]:[minute]:[second].[subsecond]");
+        let date = PrimitiveDateTime::parse(chrono::Utc::now().to_string().as_str(), format).expect("Erro ao formatar data");
+
+        //BUG maybe the way i am cheking the date is not the best
+        let payment = query!("SELECT * FROM payment_confirmed where cliente_id = $1 and created_at >= $2 and created_at <= $3",cliente.id,date,date)
+            .fetch_optional(&*pool).await.map_err(|e| {
+                error!("Failed to fetch payment_confirmed: {:?}", e);
+                anyhow::anyhow!("Failed to fetch all payment_confirmed")
+        }).expect("Erro ao buscar payment_confirmed");
+
+        if payment.is_none() {
+            bloqueia_cliente_radius(&cliente.login).await.map_err(|e| {
+                error!("Failed to block cliente: {:?}", e);
+                anyhow::anyhow!("Failed to block cliente")
+            }).expect("Erro ao bloquear cliente");
+        }
+    }
+
+    Ok(())
 }

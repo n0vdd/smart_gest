@@ -4,13 +4,12 @@ use anyhow::Context;
 use askama:: Template;
 use axum::{response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
-use chrono::{Datelike, Local, NaiveDate };
+use chrono::{Datelike, Local };
 use serde::Deserialize;
 use sqlx::{query, query_as, PgPool};
 use time::{macros::format_description, Date, PrimitiveDateTime};
 use tokio::{fs::File, io::AsyncWriteExt};
 use tracing::{error,debug};
-use tracing_subscriber::field::debug;
 
 use super::clients::{fetch_tipo_clientes_before_date,  TipoPessoa};
 
@@ -25,13 +24,6 @@ struct DiciTemplate {
 }
 
 pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl IntoResponse {
-  let current_year = Local::now().year();
-
-
-  //TODO this could be better made(but it works for now)
-  //having all the months for the year we are an the previous one is pretty ok
-  //but it could be better if the year we are now i just have until the current month
-  //and the precevious year there are all the months
   let current_month = Local::now().month();
   let current_year = Local::now().year();
 
@@ -43,13 +35,16 @@ pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
       .map(|month| format!("{:02}_{}", month, current_year - 1))
       .collect::<Vec<String>>();
 
-  reference_date.append(&mut past_reference_date);
+  past_reference_date.append(&mut reference_date);
 
 
   // Fetch existing DICI records from the database
   let dicis = fetch_all_dici_records(&pool).await.expect("Erro ao pegar dicis da base de dados");
 
-  let template = DiciTemplate { reference_date, dicis,}.render()
+  let template = DiciTemplate {
+    reference_date: past_reference_date,
+    dicis
+  }.render()
   .map_err(|e| {
     error!("Failed to render DICI list template: {:?}", e);
     e
@@ -84,9 +79,6 @@ async fn fetch_all_dici_records(pool: &PgPool) -> Result<Vec<Dici>,anyhow::Error
 }
 
 pub async fn generate_dici(Extension(pool): Extension<Arc<PgPool>>,Form(form): Form<GenerateDiciForm> ) -> impl IntoResponse {
-  //This date time shit is a mess
-  //TODO make this easier to understand
-  //Formato para comparar com o created_time na db 
   let date_format= format_description!("[day]_[month]_[year]_[hour]:[minute]:[second].[subsecond]");
   let rf = format!("{}_{}_{}", Local::now().day(),form.reference_date,Local::now().time());
   debug!("Date struct for comparing with timestamp in db: {:?}", rf);
@@ -125,8 +117,6 @@ pub async fn generate_dici(Extension(pool): Extension<Arc<PgPool>>,Form(form): F
   let mut csv_content = String::from("CNPJ;ANO;MES;COD_IBGE;TIPO_CLIENTE;TIPO_ATENDIMENTO;TIPO_MEIO;TIPO_PRODUTO;TIPO_TECNOLOGIA;VELOCIDADE;ACESSOS\n");
 
   //funcao que coloca os clientes no csv de acordo com o tipo de cliente
-  //TODO make this a proper function,(will need to pass more variables)
-  //?maybe this is ok
   let append_client_count = |clients: Vec<TipoPessoa>, tipo_cliente: &str, csv_content: &mut String| {
       if !clients.is_empty() {
           let client_count = clients.len();

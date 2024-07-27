@@ -6,6 +6,7 @@ CREATE TABLE planos (
     valor REAL NOT NULL,
     velocidade_up INTEGER NOT NULL,
     velocidade_down INTEGER NOT NULL,
+    tipo_pagamento VARCHAR(255) NOT NULL,
     -- referenciar a tabela de contratos
     -- opcoes(fibra,fibra+voip(ilimitado e limitado nao precisa diferenciar))
     -- TODO quem pega fibra+voip tem gerado o contrato de fibra e de voip

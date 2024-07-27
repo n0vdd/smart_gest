@@ -121,7 +121,6 @@ pub async fn show_endereco() -> Html<String> {
 //TODO creta better error displaying on the frontend
 pub async fn validate_phone(Query(phone): Query<TelefoneQuery>) -> Html<String> {
     debug!("Validating phone number: {:?}", phone.telefone);
-    //TODO check if the phone number is valid
     let phone = phonenumber::parse(Some(BR), phone.telefone).map_err(
         |e| -> _ {
             error!("Failed to parse phone number: {:?}", e);
@@ -131,12 +130,10 @@ pub async fn validate_phone(Query(phone): Query<TelefoneQuery>) -> Html<String> 
     if !phone.is_valid() {
         Html("Numero de telefone invalido".to_string())
     } else {
-        //TODO maybe there is a better way to do this
         Html("".to_string())
     }
 }
 
-//TODO this will be called by htmx after the user inputs the cpf/cnpj
 //will use the tipo de pessoa for a check, if the user is a pf or pj
 //Gets the cpf_cnpj from the cpf_cnpj field on the cliente form
 //Gets the Tipo Pessoa from the tipo fiel on the cliente form aswell
@@ -185,10 +182,6 @@ pub async fn validate_cpf_cnpj(
         }
     }
 }
-
-//TODO gerar dici, tenho a template de como deve ser
-//a formatacao que precisa ser usada e etc,vou precisar da crate de csv
-
 
 #[derive(Template)]
 #[template(path = "snippets/endereco_snippet.html")]
