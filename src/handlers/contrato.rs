@@ -1,117 +1,58 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, Ok};
 use axum::{extract::Path, response::{IntoResponse, Redirect}, Extension};
 use axum_extra::{extract::Form, response::Html};
 use chrono::{Datelike, Local};
-use serde::{Deserialize, Serialize};
-use sqlx::{prelude::FromRow, query, query_as, PgPool};
+use sqlx::{query, query_as, PgPool};
 use tera::{Context, Tera};
 use tokio::{fs::{DirBuilder, File}, io::AsyncWriteExt, process::Command};
 use tracing::error;
 
-//#[derive(Template)]
-//#[template(path = "contratos/contrato_padrao_fibra.html")]
-pub struct ContratoPadraoFibra {
-    client: ClienteContractData,
-    data: String
-}
-
-//#[derive(Template)]
-//#[template(path = "contratos/contrato_padrao_fibra+voip.html")]
-pub struct ContratoPadraoFibraVoip {
-    client: ClienteContractData,
-    data: String
-}
-
-//#[derive(Template)]
-//#[template(path = "contratos/contrato_padrao_voip.html")]
-pub struct ContratoPadraoVoip {
-    client: ClienteContractData,
-    data: String,
-}
-/// Struct for storing formatted client data.
-#[derive(Serialize, Deserialize, Debug,Clone)]
-struct ClienteContractData {
-    id: i32,
-    nome: String,
-    login: String,
-    rua: String,
-    numero: Option<String>,
-    complemento: Option<String>,
-    bairro: String,
-    cidade: String,
-    estado: String,
-    cep: String,
-    formatted_cpf_cnpj: String,
-    contrato_template_nome: String,
-    contrato_template_id: i32,
-    plano_id: Option<i32>
-}
-
-//Contratos sao exibidos com o nome
-//gerados com o template
-//e salvam o caminho do arquivo gerado
-#[derive(Serialize, Deserialize, Debug,FromRow)]
-struct Contrato {
-    id: i32,
-    nome: String,
-    path: String,
-    template_id: i32,
-    cliente_id: i32,
-}
-
-struct ContratoDto {
-    nome: String,
-    path: String,
-    template_id: i32,
-    cliente_id: i32,
-}
-#[derive(Debug,FromRow)]
-struct ContratoTemplateDto {
-    nome: String,
-    data: String
-}
-
-#[derive(Serialize,Deserialize,Debug,FromRow)]
-pub struct ContratoTemplate {
-    pub id: i32,
-    pub nome: String,
-    pub path: String,
-}
+use crate::models::contrato::{ClienteContractData, ContratoDto, ContratoTemplate, ContratoTemplateDto};
 
 pub async fn show_contrato_template_list(Extension(pool): Extension<Arc<PgPool>>) -> impl IntoResponse {
     let templates = query_as!(ContratoTemplate, "SELECT * FROM contratos_templates")
         .fetch_all(&*pool)
         .await.map_err(|e| {
             error!("Failed to fetch contrato templates: {:?}", e);
-            anyhow!("Failed to fetch contrato templates")
+            anyhow::anyhow!("Failed to fetch contrato templates")
         }).expect("Failed to fetch contrato templates");
 
     let mut context = Context::new();
     context.insert("templates", &templates);
 
-    let rendered = Tera::new("templates/").expect("Failed to create Tera instance")
-        .render("contrato_template_list.html", &context)
+    let mut tera = Tera::default();
+    tera.add_template_file("templates/contrato_templat_list.html", Some("List contrato template")).map_err(|open_err| {
+        error!("Failed to open contrato template list: {:?}", open_err);
+        anyhow::anyhow!("Failed to open contrato template list")
+    }).expect("Failed to open contrato template list");
+
+    let template = tera
+        .render("List contrato template", &context)
         .map_err(|e| {
             error!("Failed to render contrato template list: {:?}", e);
-            anyhow!("Failed to render contrato template list")
+            anyhow::anyhow!("Failed to render contrato template list")
         }).expect("Failed to render contrato template list");
 
-    Html(rendered)
+    Html(template)
 }
 
 //in the bottom of the form it should show what data can be used on the template like 
 //{{ date }} {{ cliente.nome }} etc,etc
 pub async fn show_contrato_template_add_form() -> impl IntoResponse {
-    let rendered = Tera::new("templates/").expect("Failed to create Tera instance")
-        .render("contrato_template_add_form.html", &Context::new())
+    let mut tera = Tera::default();
+    tera.add_template_file("templates/contrato_template_add_form.html", Some("Add contrato template")).map_err(|open_err| {
+        error!("Failed to open contrato template add form: {:?}", open_err);
+        anyhow::anyhow!("Failed to open contrato template add form")
+    }).expect("Failed to open contrato template add form");
+
+    let template = tera.render("Add contrato template", &Context::new())
         .map_err(|e| {
             error!("Failed to render contrato template add form: {:?}", e);
-            anyhow!("Failed to render contrato template add form")
+            anyhow::anyhow!("Failed to render contrato template add form")
         }).expect("Failed to render contrato template add form");
 
-    Html(rendered)
+    Html(template)
 }
 
 pub async fn show_contrato_template_edit_form(Extension(pool):Extension<Arc<PgPool>>,Path(id):Path<i32>) -> impl IntoResponse {
@@ -119,16 +60,16 @@ pub async fn show_contrato_template_edit_form(Extension(pool):Extension<Arc<PgPo
         .fetch_one(&*pool)
         .await.map_err(|e| {
             error!("Failed to fetch contrato template: {:?}", e);
-            anyhow!("Failed to fetch contrato template")
+            anyhow::anyhow!("Failed to fetch contrato template")
         }).expect("Failed to fetch contrato template");
 
     let data = tokio::fs::read(&template.path).await.map_err(|e| {
         error!("Failed to read template file: {:?}", e);
-        anyhow!("Failed to read template file")
+        anyhow::anyhow!("Failed to read template file")
     }).expect("Failed to read template file");
     let data = String::from_utf8(data).map_err(|e| {
         error!("Failed to convert template data to string: {:?}", e);
-        anyhow!("Failed to convert template data to string")
+        anyhow::anyhow!("Failed to convert template data to string")
     }).expect("Failed to convert template data to string");
 
     let mut context = Context::new();
@@ -136,14 +77,19 @@ pub async fn show_contrato_template_edit_form(Extension(pool):Extension<Arc<PgPo
     context.insert("data", &data);
     context.insert("template", &template);
 
-    let rendered = Tera::new("templates/").expect("Failed to create Tera instance")
-        .render("contrato_template_edit_form.html",&context)
+    let mut tera = Tera::default();
+    tera.add_template_file("templates/contrato_template_edit_form.html", Some("Edit contrato template")).map_err(|open_err| {
+        error!("Failed to open contrato template edit form: {:?}", open_err);
+        anyhow::anyhow!("Failed to open contrato template edit form")
+    }).expect("Failed to open contrato template edit form");
+
+    let template = tera.render("Edit contrato template",&context)
         .map_err(|e| {
             error!("Failed to render contrato template edit form: {:?}", e);
-            anyhow!("Failed to render contrato template edit form")
+            anyhow::anyhow!("Failed to render contrato template edit form")
         }).expect("Failed to render contrato template edit form");
 
-    Html(rendered)
+    Html(template)
 }
 
 //Save the path and name of the template used to generate the contract to the db
@@ -155,11 +101,11 @@ pub async fn add_contrato_template(Extension(pool):Extension<Arc<PgPool>>,
 
     File::create(&path).await.map_err(|e| {
         error!("Failed to create template file: {:?}", e);
-        anyhow!("Failed to create template file")
+        anyhow::anyhow!("Failed to create template file")
     }).expect("Failed to create template file")
     .write_all(template.data.as_bytes()).await.map_err(|e| {
         error!("Failed to write template data to file: {:?}", e);
-        anyhow!("Failed to write template data to file")
+        anyhow::anyhow!("Failed to write template data to file")
     }).expect("Failed to write template data to file");
 
     query!(
@@ -168,7 +114,7 @@ pub async fn add_contrato_template(Extension(pool):Extension<Arc<PgPool>>,
         path
     ).execute(&*pool).await.map_err(|e| {
         error!("Failed to save template to database: {:?}", e);
-        anyhow!("Failed to save template to database")
+        anyhow::anyhow!("Failed to save template to database")
     }).expect("Failed to save template to database");
 
     Redirect::to("/contrato")
@@ -257,6 +203,7 @@ pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(clien
             clientes.estado, 
             clientes.complemento, 
             clientes.plano_id,
+            contratos_templates.path AS contrato_template_path,
             contratos_templates.nome AS contrato_template_nome,
             contratos_templates.id AS contrato_template_id
         FROM 
@@ -285,21 +232,24 @@ pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(clien
     //TODO There should be a better way to do this
     //Compara o nome da template para saber qual contrato sera gerado
     //Tenho que retornar uma tuple com 2 contratos devido a template fibra+voip(usa 2 contratos)
-    let template = Tera::new("templates/").expect("Failed to create Tera instance");
+    let tera= Tera::new("/templates/contratos/*").map_err(|e| {
+        error!("Failed to compile contrato templates: {:?}", e);
+        anyhow::anyhow!("Failed to compile contrato templates")
+    }).expect("Failed to compile contrato templates");
     let mut context = Context::new();
     context.insert("cliente", &client);
     context.insert("date", &data);
 
-    let template = template.render(&client.contrato_template_nome, &context).map_err(|e| {
+    let template = tera.render(&client.contrato_template_path, &context).map_err(|e| {
         error!("Failed to render contrato template: {:?}", e);
-        anyhow!("Failed to render contrato template")
+        anyhow::anyhow!("Failed to render contrato template")
     }).expect("Failed to render contrato template");
 
     //Cria o diretorio com o nome do cliente para salvar os contratos relacionados ao mesmo
     let dir_path = format!("contratos/{}", client.nome);
     DirBuilder::new().recursive(true).create(&dir_path).await.map_err(|e| {
         error!("Failed to create directory: {:?}", e);
-        anyhow!("Falha ao criar diretorio para salvar contratos do cliente {e}")
+        anyhow::anyhow!("Falha ao criar diretorio para salvar contratos do cliente {e}")
     }).expect("Erro ao criar diretorio");
 
     // Save the rendered HTML to a temporary file
@@ -307,7 +257,7 @@ pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(clien
 
     tokio::fs::write(&html_file_path, template).await.map_err(|e| {
         error!("Failed to write temporary HTML file: {:?}", e);
-        anyhow!("Falha ao escrever html temporario: {html_file_path}")
+        anyhow::anyhow!("Falha ao escrever html temporario: {html_file_path}")
     }).expect("Erro ao escrever html temporario");
 
     // Save the contract to the filesystem
@@ -320,7 +270,7 @@ pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(clien
         .await
         .map_err(|e| {
             error!("Failed to convert HTML to PDF: {:?}", e);
-            anyhow!("Falha ao converter html temporario: {html_file_path} para o arquivo pdf:{pdf_file_path}")
+            anyhow::anyhow!("Falha ao converter html temporario: {html_file_path} para o arquivo pdf:{pdf_file_path}")
     }).expect("Erro ao converter html para pdf");
 
     // Save the contract path to the database
@@ -340,7 +290,7 @@ pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(clien
         contrato.cliente_id
     ).execute(&*pool).await.map_err(|e| {
         error!("Failed to save contract path to database: {:?}", e);
-        anyhow!("Falha ao salvar os dados do contrato para o banco de dados")
+        anyhow::anyhow!("Falha ao salvar os dados do contrato para o banco de dados")
     }).expect("Erro ao salvar caminho do contrato no banco de dados");
 
     Redirect::to("/cliente").into_response()

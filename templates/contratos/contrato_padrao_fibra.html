@@ -47,6 +47,7 @@
     <p><strong>{{ client.nome }}</strong></p>
     <p>
         {{ client.rua }}, 
+        <!--TODO remove the if let for a more agnostica templating code-->
         {% if let Some(numero) = client.numero %}
             {{ numero }},
         {% endif %}

@@ -18,7 +18,8 @@ const DESCRICAO: &str = "Serviço de internet";
 use fantoccini::{Client, ClientBuilder, Locator};
 use tracing::{debug, error};
 
-use crate::handlers::clients::Cliente;
+use crate::models::client::Cliente;
+
 
 //TODO cancela nota fiscal
 pub async fn cancela_nfs() {

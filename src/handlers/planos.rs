@@ -1,28 +1,14 @@
-use std::{str::FromStr, sync::Arc};
+use std:: sync::Arc;
 
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
 use radius::{create_radius_plano, PlanoRadiusDto};
-use serde::{Deserialize, Serialize};
-use sqlx::{prelude::FromRow, query, query_as, PgPool};
+use sqlx::{ query, query_as, PgPool};
 use tera::Tera;
-use time::PrimitiveDateTime;
 use tracing::error;
 
-use super::contrato::ContratoTemplate;
+use crate::models::{contrato::ContratoTemplate, plano::{Plano, PlanoDto}};
 
-//#[derive(Template)]
-//#[template(path = "plano_list.html")]
-struct PlanosListTemplate {
-    planos: Vec<Plano>,
-}
-
-//#[derive(Template)]
-//#[template(path = "plano_edit.html")]
-struct PlanoEditFormTemplate {
-    plano: Plano,
-    contracts: Vec<ContratoTemplate>,
-}
 
 
 //Recebe a id de um cliente
@@ -71,10 +57,7 @@ pub async fn list_planos(Extension(pool): Extension<Arc<PgPool>>) -> impl IntoRe
         e
     }).expect("Erro ao buscar planos");
     
-    let mut tera = Tera::new("templates/*").map_err(|e| {
-        error!("Failed to compile templates: {:?}", e);
-        e
-    }).expect("Failed to compile templates");
+    let mut tera = Tera::default();
 
     tera.add_template_file("templates/plano_list.html", Some("plano list")).map_err(|e| {
         error!("Failed to add plano list template: {:?}", e);
@@ -184,10 +167,7 @@ pub async fn show_planos_form(Extension(pool): Extension<Arc<PgPool>>) -> Html<S
             return Html("<p>Failed to fetch contract templates</p>".to_string())
         }).expect("Failed to fetch contract templates");
 
-    let mut tera = Tera::new("templates/*").map_err(|e| -> _ {
-        error!("Failed to compile templates: {:?}", e);
-        return Html("<p>Failed to compile templates</p>".to_string())
-    }).expect("Failed to compile templates");
+    let mut tera = Tera::default();
 
     tera.add_template_file("templates/plano_add.html", Some("plano add")).map_err(|e| -> _ {
         error!("Failed to add plano add template: {:?}", e);
@@ -242,78 +222,4 @@ pub async fn register_plano(
     }).expect("Failed to create radius plano");
 
     Redirect::to("/plano")
-}
-//need to show planos_form and register plano to db
-//#[derive(Template)]
-//#[template(path = "planos_add.html")]
-struct PlanosFormTemplate {
-    contracts: Vec<ContratoTemplate>,
-}
-
-#[derive(Deserialize, Serialize, Debug, FromRow)]
-pub struct PlanoDto {
-    pub nome: String,
-    pub valor: f32,
-    pub velocidade_up: i32,
-    pub velocidade_down: i32,
-    pub descricao: Option<String>,
-    pub contrato_template_id: i32
-}
-
-#[derive(Deserialize, Serialize, Debug, FromRow)]
-pub struct Plano {
-    pub id: i32,
-    pub nome: String,
-    pub valor: f32,
-    pub velocidade_up: i32,
-    pub velocidade_down: i32,
-    pub tipo_pagamento: TipoPagamento,
-    pub descricao: Option<String>,
-    pub contrato_template_id: i32,
-    pub created_at : Option<PrimitiveDateTime>,
-    pub updated_at : Option<PrimitiveDateTime>
-}
-
-
-#[derive(Deserialize, Serialize, Debug,Clone)]
-pub enum TipoPagamento {
-    Boleto,
-    Pix,
-    CartaoCredito,
-}
-
-impl FromStr for TipoPagamento {
-    type Err = ();
-
-    fn from_str(input: &str) -> Result<TipoPagamento, Self::Err> {
-        match input {
-            "BOLETO" => Ok(TipoPagamento::Boleto),
-            "PIX" => Ok(TipoPagamento::Pix),
-            "CREDIT_CARD" => Ok(TipoPagamento::CartaoCredito),
-            _ => Err(()),
-        }
-    }
-}
-
-impl From<String> for TipoPagamento {
-    fn from(s: String) -> TipoPagamento {
-        TipoPagamento::from_str(&s).unwrap_or(TipoPagamento::Boleto) // default to Boleto or handle error appropriately
-    }
-}
-
-impl ToString for TipoPagamento {
-    fn to_string(&self) -> String {
-        match self {
-            TipoPagamento::Boleto => "BOLETO".to_string(),
-            TipoPagamento::Pix => "PIX".to_string(),
-            TipoPagamento::CartaoCredito => "CREDIT_CARD".to_string(),
-        }
-    }
-}
-
-// Implementing Into<String> for TipoPagamento
-impl Into<String> for TipoPagamento {
-    fn into(self) -> String {
-        self.to_string()
-    }
 }

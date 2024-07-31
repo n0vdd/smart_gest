@@ -9,9 +9,9 @@ use tera::Tera;
 use thiserror::Error;
 use tracing::{debug, error};
 
-use crate::handlers::clients::EnderecoDto;
+use crate::models::{client::TipoPessoa, endereco::EnderecoDto};
 
-use super::clients::TipoPessoa;
+
 
 //Recebe um cep do campo cep do formulario de endereco
 //Envia um pedido para a api do webmania que retorna os dados do cep(rua,bairro,estado,cidade etc)
@@ -87,18 +87,6 @@ pub async fn lookup_cep(
 }
 
 
-//#[derive(Template)]
-//#[template(path = "snippets/cpf_cnpj_snippet.html")]
-pub struct CpfCnpjTemplate {
-    pub formatted_cpf_cnpj: String,
-    pub cpf_cnpj: String,
-}
-
-//#[derive(Template)]
-//#[template(path = "snippets/telefone_snippet.html")]
-pub struct TelefoneTemplate {
-    pub telefone: String,
-}
 
 //Mosta o snippet do endereco sem os dados
 pub async fn show_endereco() -> Html<String> {
@@ -148,7 +136,7 @@ pub async fn validate_cpf_cnpj(
 ) -> Html<String> {
     debug!("Validating CPF/CNPJ: {:?}", cpf_cnpj.formatted_cpf_cnpj);
     let mut tera = Tera::default();
-    tera.add_template_file("templates/cpf_cnpj_snippet.html", Some("cpf_cnpj"));
+    tera.add_template_file("templates/cpf_cnpj_snippet.html", Some("cpf_cnpj")).expect("Failed to open template file");
     let mut context = tera::Context::new();
     context.insert("cpf_cnpj", &cpf_cnpj.formatted_cpf_cnpj);
 
@@ -191,16 +179,6 @@ pub async fn validate_cpf_cnpj(
     }
 }
 
-//#[derive(Template)]
-//#[template(path = "snippets/endereco_snippet.html")]
-struct EnderecoSnippetTemplate{
-    cep: String,
-    rua: String,
-    bairro: String,
-    cidade: String,
-    estado: String,
-    ibge: String,
-}
 
 #[derive(Deserialize)]
 pub struct CpfCnpjQuery {

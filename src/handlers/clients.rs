@@ -3,143 +3,14 @@ use radius::{bloqueia_cliente_radius, add_cliente_radius, ClienteNas};
 use tera::Tera;
 use time::{macros::format_description, PrimitiveDateTime};
 use tracing::{debug, error};
-use validator::Validate;
-use std::fmt;
 use axum_extra::extract::Form;
 use cnpj::Cnpj;
 use cpf::Cpf;
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use sqlx::{prelude::{FromRow, Type}, query, query_as, Decode, Encode, PgPool, Postgres};
+use sqlx::{query, query_as, PgPool};
 
-use crate::handlers::{mikrotik::Mikrotik, planos::Plano};
 
-use crate::services::webhooks::add_cliente_to_asaas;
-
-// Structs and Enums
-#[derive(Deserialize, Serialize, Debug, FromRow,Validate)]
-pub struct ClienteDto {
-    pub tipo: TipoPessoa,
-    pub nome: String,
-    #[validate(email)]
-    pub email: String,
-    pub cpf_cnpj: String,
-    pub formatted_cpf_cnpj: String,
-    #[serde(flatten)]
-    pub endereco: EnderecoDto,
-    pub telefone: String,
-    pub login: String,
-    pub senha: String,
-    pub mikrotik_id: i32,
-    pub plano_id: i32,
-    pub contrato_id: Option<Vec<i32>>
-}
-
-#[derive(Deserialize, Serialize, Debug, FromRow)]
-pub struct Cliente {
-    pub id: i32,
-    pub tipo: bool,
-    pub nome: String,
-    pub email: String,
-    pub cpf_cnpj: String,
-    pub formatted_cpf_cnpj: String,
-    pub cep: String,
-    pub rua: String,
-    //TODO convert this on cliente_edit.html
-    pub numero: Option<String>,
-    pub bairro: String,
-    pub cidade: String,
-    pub estado: String,
-    //TODO convert this on cliente_edit.html
-    pub complemento: Option<String>,
-    pub ibge_code: String,
-    pub telefone: String,
-    //TODO convert this on cliente_edit.html
-    pub login: Option<String>,
-    //TODO convert this on cliente_edit.html
-    pub senha: Option<String>,
-    pub mikrotik_id: i32,
-    pub plano_id: i32,
-    // pub contrato_id: Option<Vec<i32>>
-    pub created_at: Option<PrimitiveDateTime>,
-    pub updated_at: Option<PrimitiveDateTime>,
-}
-
-#[derive(Deserialize, Serialize, Debug, FromRow)]
-pub struct Endereco {
-    pub cep: Cep,
-    pub rua: String,
-    pub numero: Option<String>,
-    pub bairro: String,
-    pub cidade: String,
-    pub estado: String,
-    pub complemento: Option<String>,
-    pub ibge: String,
-}
-
-#[derive(Serialize,Deserialize,Debug)]
-pub struct EnderecoDto {
-    pub cep: String,
-    pub rua: String,
-    pub numero: Option<String>,
-    pub bairro: String,
-    pub cidade: String,
-    pub estado: String,
-    pub complemento: Option<String>,
-    pub ibge: String,
-}
-
-#[derive(Deserialize, Serialize, Debug, FromRow)]
-pub struct Cep {
-    pub cep: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, PartialEq, Clone, Copy)]
-#[serde(rename_all = "lowercase")]
-pub enum TipoPessoa {
-    PessoaFisica,
-    PessoaJuridica,
-}
-
-impl TipoPessoa {
-    fn as_bool(&self) -> bool {
-        match self {
-            TipoPessoa::PessoaFisica => false,
-            TipoPessoa::PessoaJuridica => true,
-        }
-    }
-
-    fn from_bool(value: bool) -> Self {
-        match value {
-            false => TipoPessoa::PessoaFisica,
-            true => TipoPessoa::PessoaJuridica,
-        }
-    }
-}
-
-impl Type<Postgres> for TipoPessoa {
-    fn type_info() -> sqlx::postgres::PgTypeInfo {
-        <bool as Type<Postgres>>::type_info()
-    }
-}
-
-impl Encode<'_, Postgres> for TipoPessoa {
-    fn encode_by_ref(&self, buf: &mut sqlx::postgres::PgArgumentBuffer) -> sqlx::encode::IsNull {
-        <bool as Encode<Postgres>>::encode(self.as_bool(), buf)
-    }
-}
-
-impl<'r> Decode<'r, Postgres> for TipoPessoa {
-    fn decode(value: sqlx::postgres::PgValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
-        let int_value = <bool as Decode<Postgres>>::decode(value)?;
-        Ok(TipoPessoa::from_bool(int_value))
-    }
-}
-
-pub struct SimpleCliente {
-    pub id: i32,
-    pub login: String
-}
+use crate::{models::{client::{Cliente, ClienteDto, SimpleCliente, TipoPessoa}, mikrotik::Mikrotik, plano::Plano}, services::webhooks::add_cliente_to_asaas};
 
 async fn get_all_clientes(pool: &PgPool) -> Result<Vec<SimpleCliente>, anyhow::Error> {
     query_as!(SimpleCliente, "SELECT id,login FROM clientes")
@@ -150,7 +21,6 @@ async fn get_all_clientes(pool: &PgPool) -> Result<Vec<SimpleCliente>, anyhow::E
         })
 }
 
-// Handlers
 
 //Get all the clientes from the db
 //Render the template with the clientes
@@ -166,7 +36,7 @@ pub async fn show_cliente_list(
             return Html("<p>Failed to fetch clients</p>".to_string())
         }).expect("Failed to fetch clients");
 
-    let mut tera = Tera::new("templates/*").expect("Failed to compile templates");
+    let mut tera = Tera::default();
     tera.add_template_file("templates/cliente_list.html", Some("cliente list")).map_err(|e| {
         error!("Failed to add template file: {:?}", e);
         return Html("<p>Failed to add template file</p>".to_string())
@@ -320,7 +190,7 @@ pub async fn show_cliente_form(
             Html("<p>Failed to fetch all Planos</p>".to_string())
         }).expect("Failed to fetch Planos");
     
-    let mut tera = Tera::new("templates/*").expect("Failed to compile templates");
+    let mut tera = Tera::default();
     tera.add_template_file("templates/cliente_add.html", Some("cliente list")).map_err(|e| {
         error!("Failed to add template file: {:?}", e);
         return Html("<p>Failed to add template file</p>".to_string())
@@ -460,19 +330,6 @@ pub async fn register_cliente(
 
 // Templates
 
-//#[derive(Template)]
-//#[template(path = "cliente_add.html")]
-struct ClienteFormTemplate {
-    mikrotik_options: Vec<Mikrotik>,
-    plan_options: Vec<Plano>,
-}
-
-//#[derive(Template)]
-//#[template(path = "cliente_list.html")]
-struct ClienteListTemplate {
-    clients: Vec<Cliente>,
-}
-
 /* 
 #[derive(Template)]
 #[template(path = "cliente_edit.html")]
@@ -493,12 +350,6 @@ impl ClienteEditTemplate<'_> {
 }
 */
 
-impl fmt::Display for Endereco {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} - {}, {}, {}, {}, {}", self.rua, self.numero.clone().unwrap_or_default(),
-        self.bairro, self.cidade, self.estado, self.cep.cep)
-    }
-}
 
 //param: date, a date to be compared on the db with the time the cliente was created
 //Selects the tipo of the cliente(Pessoa Fisica ou Juridica) for all the clientes created before the given date

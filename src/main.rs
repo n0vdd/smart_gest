@@ -1,6 +1,7 @@
 mod db;
 mod handlers;
 mod services;
+mod models;
 
 use anyhow::anyhow;
 use axum::extract::Request;

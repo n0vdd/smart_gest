@@ -44,7 +44,7 @@ on template (start from the previous months from the month we are in) -->
                     {% for dici in dicis %}
                     <tr>
                         <td class="border px-4 py-2">{{ dici.reference_date }}</td>
-                        <!--TODO use if let some to extract the date-->
+                        <!--TODO remove the if let for a more agnostic templating code-->
                         {% if let Some(created_at) = dici.created_at %}
                             <td class="border px-4 py-2">{{ created_at }}</td>
                         {% endif %}

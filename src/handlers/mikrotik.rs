@@ -1,14 +1,13 @@
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
 use radius::{create_mikrotik_radius, MikrotikNas};
-use serde::{Deserialize, Serialize};
 use tera::{Context, Tera};
-use time::PrimitiveDateTime;
 use tracing::{debug, error};
 use std::{net::Ipv4Addr,  str::FromStr, sync::Arc};
-use sqlx::{prelude::FromRow, query, query_as, PgPool};
+use sqlx::{ query, query_as, PgPool};
 
-use crate::handlers::{clients::Cliente, planos::Plano};
+use crate::models::{client::Cliente, mikrotik::{Mikrotik, MikrotikDto}, plano::Plano};
+
 
 pub async fn show_mikrotik_form() -> Html<String> {
     let mut tera = Tera::default();
@@ -70,6 +69,7 @@ pub async fn failover_radius_script(Path(mikrotik_id):Path<i32>,Extension(pool):
         }).expect("Failed to fetch Planos");
 
     //Get all the clientes for the given mikrotik
+    //TODO The correct thing would be to have a cliente function that gets the clientes for a mikrotik id
     let clientes = query_as!(Cliente,"SELECT * FROM clientes WHERE mikrotik_id = $1",mikrotik_id)
         .fetch_all(&*pool)
         .await.map_err(|e| -> _ {
@@ -277,39 +277,5 @@ pub async fn update_mikrotik(
     Redirect::to("/mikrotik").into_response()
 }
 
-//#[derive(Template)]
-//#[template(path = "mikrotik_edit.html")]
-struct MikrotikEditTemplate {
-    mikrotik: Mikrotik,
-}
 
-#[derive(Deserialize, Serialize, Debug, FromRow)]
-pub struct Mikrotik {
-    pub id: i32,
-    pub nome: String,
-    pub ip: String,
-    pub secret: String,
-    pub max_clientes: Option<i32>, 
-    pub created_at: Option<PrimitiveDateTime>,
-    pub updated_at: Option<PrimitiveDateTime>,
-}
-
-//#[derive(Template)]
-//#[template(path = "mikrotik_add.html")]
-struct MikrotikFormTemplate;
-
-
-#[derive(Deserialize , Debug, FromRow)]
-pub struct MikrotikDto {
-    pub nome: String,
-    pub ip: Ipv4Addr,
-    pub secret: String,
-    pub max_clientes: Option<i32>
-}
-
-//#[derive(Template)]
-//#[template(path = "mikrotik_list.html")]
-struct MikrotikListTemplate {
-    mikrotik_options: Vec<Mikrotik>,
-}
 

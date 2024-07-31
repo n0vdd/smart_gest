@@ -4,23 +4,19 @@ use anyhow::Context;
 use axum::{response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
 use chrono::{Datelike, Local };
-use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as, PgPool};
-use time::{macros::format_description, Date, PrimitiveDateTime};
+use tera::Tera;
+use time::{macros::format_description, Date };
 use tokio::{fs::File, io::AsyncWriteExt};
 use tracing::{error,debug};
 
-use super::clients::{fetch_tipo_clientes_before_date,  TipoPessoa};
+use crate::models::{client::TipoPessoa, dici::{Dici, GenerateDiciForm}};
+
+use super::clients::fetch_tipo_clientes_before_date;
 
 const CNPJ:&str = "48530335000148"; // Hardcoded CNPJ
 const COD_IBGE:&str = "3106200"; // Hardcoded COD_IBGE
 
-//#[derive(Template)]
-//#[template(path = "dici_list.html")]
-struct DiciTemplate {
-  reference_date: Vec<String>,
-  dicis: Vec<Dici>,
-}
 
 pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl IntoResponse {
   let current_month = Local::now().month();
@@ -40,9 +36,8 @@ pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
   // Fetch existing DICI records from the database
   let dicis = fetch_all_dici_records(&pool).await.expect("Erro ao pegar dicis da base de dados");
 
-  let mut tera = tera::Tera::new("templates/**").map_err(|e| {
-    error!("Failed to compile templates: {:?}", e);
-  }).expect("Failed to compile templates");
+  let mut tera = Tera::new("templates/**/*").expect("Failed to parse templates");
+
   tera.add_template_file("templates/dici_list.html", Some("dici list")).map_err(|e| {
     error!("Failed to add template file: {:?}", e);
   }).expect("Failed to add template file");
@@ -55,18 +50,6 @@ pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
   }).expect("Failed to render template");
 
   Html(template)
-}
-
-#[derive(Deserialize)]
-pub struct GenerateDiciForm {
-  pub reference_date: String,
-}
-
-#[derive(Deserialize,Serialize,Debug)]
-struct Dici {
-  id: i32,
-  reference_date: Date,
-  created_at: Option<PrimitiveDateTime> 
 }
 
 async fn fetch_all_dici_records(pool: &PgPool) -> Result<Vec<Dici>,anyhow::Error> {

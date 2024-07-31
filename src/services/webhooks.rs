@@ -2,14 +2,15 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use axum::{http::{self}, response::IntoResponse, Extension, Json};
-use chrono::{format, Date, Datelike, Local, Month, NaiveTime};
+use chrono::{Datelike, Local};
 use radius::{bloqueia_cliente_radius, checa_cliente_bloqueado_radius, desbloqueia_cliente};
 use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as, PgPool};
 use time::macros::format_description;
 use tracing::{debug, error};
 
-use crate::{handlers::{clients::{Cliente, ClienteDto}, planos::{find_plano_by_cliente, Plano, TipoPagamento}}, services::nfs::gera_nfs};
+use crate::{handlers::planos::find_plano_by_cliente, models::{client::{Cliente, ClienteDto}, plano::{Plano, TipoPagamento}}, services::nfs::gera_nfs};
+
 
 ///!this is the api key for the sandbox, it should be set on the env for production
 const API_KEY: &str = "$aact_YTU5YTE0M2M2N2I4MTliNzk0YTI5N2U5MzdjNWZmNDQ6OjAwMDAwMDAwMDAwMDAwODUzNzI6OiRhYWNoXzAzYTI4MDhmLWI0NmItNDliNC1hNTIwLTRkNWUzZDBjNTQxZg==";
