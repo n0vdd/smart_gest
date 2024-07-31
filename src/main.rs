@@ -10,7 +10,7 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::routing::{delete, put};
 use axum::{Router, routing::get, routing::post, extract::Extension};
-use chrono::{Datelike, Utc};
+use chrono::{Datelike, Duration, Utc};
 use cron::Schedule;
 use db::create_postgres_pool;
 use handlers::clients::{bloqueia_clientes_atrasados, delete_cliente,  register_cliente, show_cliente_form, show_cliente_list, update_cliente};
@@ -21,6 +21,7 @@ use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edi
 use handlers::utils::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
 use once_cell::sync::Lazy;
 use radius::{create_radius_cliente_pool, create_radius_plano_bloqueado};
+use services::voip::checa_voip_down;
 use services::webhooks::webhook_handler;
 use sqlx::PgPool;
 use tokio::net::TcpListener;
@@ -97,6 +98,22 @@ async fn check_access_token(req: Request,next: Next) -> Result<impl IntoResponse
 async fn scheduler(pool: Arc<PgPool>) {
     let expression = "0 0 0 1,12 * *"; // Run at midnight on the 1st and 12th of every month
     let schedule = Schedule::from_str(expression).expect("Invalid cron expression for scheduler");
+
+    //TODO a expression that will run everyday at 4am
+    let daily = "0 4 0 * * *";
+    let daily_schedule = Schedule::from_str(&daily).unwrap();
+
+    let mut day_to_come = daily_schedule.upcoming(Utc);
+    while let Some(next) = day_to_come.next() {
+        let now = Utc::now();
+        let duration = next - now;
+
+        if duration > Duration::zero() {
+            tokio::time::sleep(duration.to_std().unwrap()).await;
+        }
+
+        checa_voip_down().await.unwrap();
+    }
 
     let mut upcoming = schedule.upcoming(Utc);
     while let Some(next) = upcoming.next() {
