@@ -71,7 +71,6 @@ async fn check_did_registrado(client:&Client) -> Result<(),anyhow::Error> {
     }
 
     let http_client = reqwest::Client::new();
-    //TODO get all routers in http://172.27.27.37:7557/devices
     //it will return json data, we will extract the wan name: InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username and the _id
     let routers = http_client.get("http://172.27.27.37:7557/devices").send().await.map_err(|e| {
         error!("Failed to get routers: {}", e);
@@ -103,6 +102,8 @@ async fn check_did_registrado(client:&Client) -> Result<(),anyhow::Error> {
 #[derive(Deserialize)]
 struct Router {
     //BUG this will not work like this i think
+    //TODO look at the ways to replicate the json structure for serde
+    //dont want to have 8 structs to access the wan name
     #[serde(rename = "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username._value")]
     wan_name:String,
     _id:String,

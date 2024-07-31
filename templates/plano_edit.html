@@ -30,8 +30,8 @@
         <div class="mb-4">
             <label for="descricao" class="block text-gray-700 text-sm font-bold mb-2">Descrição:</label>
             <!--TODO remove if let some for a more agnostic templating code-->
-            {% if let Some(descricao) = plano.descricao %}
-                <textarea id="descricao" name="descricao" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">{{ descricao }}</textarea>
+            {% if plano.descricao is defined %}
+                <textarea id="descricao" name="descricao" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">{{ plano.descricao }}</textarea>
             {% else %}
                 <textarea id="descricao" name="descricao" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"></textarea>
             {% endif %}

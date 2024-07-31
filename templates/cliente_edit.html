@@ -9,6 +9,7 @@
         <div class="mb-4">
             <label for="tipo" class="block text-gray-700 text-sm font-bold mb-2">Tipo:</label>
             <select id="tipo" name="tipo" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                <!--TODO can process this on rust and pass the value? -->
                 <option value="PessoaFisica" {% if self.is_pessoa_fisica() %}selected{% endif %}>Pessoa Física</option>
                 <option value="PessoaJuridica" {% if self.is_pessoa_juridica() %}selected{% endif %}>Pessoa Jurídica</option>
             </select>

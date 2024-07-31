@@ -36,18 +36,13 @@ pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
   // Fetch existing DICI records from the database
   let dicis = fetch_all_dici_records(&pool).await.expect("Erro ao pegar dicis da base de dados");
 
-  let mut tera = Tera::new("templates/**/*").expect("Failed to parse templates");
-
-  tera.add_template_file("templates/dici_list.html", Some("dici list")).map_err(|e| {
-    error!("Failed to add template file: {:?}", e);
-  }).expect("Failed to add template file");
-
   let mut context = tera::Context::new(); 
   context.insert("dicis", &dicis);
 
-  let template = tera.render("dici list", &context).map_err(|e| {
-    error!("Failed to render template: {:?}", e);
-  }).expect("Failed to render template");
+  let template = Tera::new("templates/**/*").expect("Failed to parse templates").render("dici_list.html", &context)
+    .map_err(|e| {
+      error!("Failed to render template: {:?}", e);
+    }).expect("Failed to render template");
 
   Html(template)
 }

@@ -47,12 +47,11 @@
     <p><strong>{{ client.nome }}</strong></p>
     <p>
         {{ client.rua }}, 
-        <!--TODO remove the if let for a more agnostica templating code-->
-        {% if let Some(numero) = client.numero %}
-            {{ numero }},
+        {% if client.numero is defined %}
+            {{ client.numero }},
         {% endif %}
-        {% if let Some(complemento) = client.complemento %}
-            {{ complemento }},
+        {% if client.complemento is defined %}
+            {{ client.complemento }},
         {% endif %}
         {{ client.bairro }},
         {{ client.cidade }},

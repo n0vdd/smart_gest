@@ -2,7 +2,7 @@
 on template (start from the previous months from the month we are in) -->
 
 <!--TODO list with all dici generated until now with a button to delete them and another to download it-->
-{% extends "snippets/base.html" %}
+{% extends "base" %}
 
 {% block title %}DICI{% endblock %}
 
@@ -44,9 +44,9 @@ on template (start from the previous months from the month we are in) -->
                     {% for dici in dicis %}
                     <tr>
                         <td class="border px-4 py-2">{{ dici.reference_date }}</td>
-                        <!--TODO remove the if let for a more agnostic templating code-->
-                        {% if let Some(created_at) = dici.created_at %}
-                            <td class="border px-4 py-2">{{ created_at }}</td>
+                        <!--BUG nao sei se is defined ira considerar NONE como nao definido-->
+                        {% if dici.created_at is defined %}
+                            <td class="border px-4 py-2">{{ dici.created_at }}</td>
                         {% endif %}
 
                         <td class="border px-4 py-2">
