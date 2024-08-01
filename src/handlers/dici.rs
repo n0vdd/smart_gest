@@ -38,10 +38,11 @@ pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
 
 
   // Fetch existing DICI records from the database
-  let dicis = fetch_all_dici_records(&pool).await.expect("Erro ao pegar dicis da base de dados");
+  let dicis: Vec<Dici> = fetch_all_dici_records(&pool).await.expect("Erro ao pegar dicis da base de dados");
 
   let mut context = tera::Context::new(); 
   context.insert("dicis", &dicis);
+  context.insert("reference_date", &past_reference_date);
 
   let template = TEMPLATES.render("dici_list.html", &context)
     .map_err(|e| {

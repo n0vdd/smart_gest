@@ -40,4 +40,5 @@ local-ip-address = "0.6.1"
 cron = "0.12.1"
 #askama_axum = "0.4.0"
 tera = "1.20.0"
+lazy_static = "1.5.0"
 #axum-template = { version = "2.3.0", features = ["tera"] }

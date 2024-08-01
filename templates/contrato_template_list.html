@@ -1,10 +1,3 @@
-<!-- create a list for a vec of this pub struct ContratoTemplate {
-    pub id: i32,
-    pub nome: String,
-    pub path: String,
-}
-with the option to edit or delete the template
--->
 {% extends "snippets/base.html" %}
 
 {% block content %}
@@ -21,12 +14,9 @@ with the option to edit or delete the template
                 <tr>
                     <td>{{ template.nome }}</td>
                     <td>
-                        <!--this is not the best way i think, maybe use htmx, this would be put-->
-                        <a href="/contrato/template/{{ template.id }}">Editar</a>
-                        <!--<a href="{% url 'contrato_template_edit' template.id %}">Editar</a>
-                        this would be delete
-                        <a href="{% url 'contrato_template_delete' template.id %}">Deletar</a>
-                        -->
+                        <!--TODO redo the <a> tags to use htmx-->
+                        <a hx-put="/contrato/template/{{ template.id }}">Editar</a>
+                        <a hx-delete="/contrato/template/{{ template.id }}" ht-target="closest tr">Deletar</a>
                     </td>
                 </tr>
             {% endfor %}

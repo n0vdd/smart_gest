@@ -1,20 +1,3 @@
-<!--this should be a form with a field for the name of the contrato template and a field for adding the contrato html template
-    there should be the templates that will be rendered like {{ date }} {{ cliente.nome }} etc...
-    for this struct 
-    struct ClienteContractData {
-        nome: String,
-        login: String,
-        rua: String,
-        numero: Option<String>,
-        complemento: Option<String>,
-        bairro: String,
-        cidade: String,
-        estado: String,
-        cep: String,
-        formatted_cpf_cnpj: String,
-        contrato_template_nome: String,
-    }
--->
 {% extends "snippets/base.html" %}
 
 {% block title %}Adicionar Template de Contrato{% endblock title%}
