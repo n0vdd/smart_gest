@@ -45,11 +45,12 @@
     <p><strong>{{ client.nome }}</strong></p>
     <p>
         {{ client.rua }}, 
-        {% if client.numero is defined %}
-            {{ client.numero }},
+            <!--TODO remove if let some for a more agnostic templating code-->
+        {% if client.numero %}
+            {{ numero }},
         {% endif %}
-        {% if client.complemento is defined %}
-            {{ client.complemento }},
+        {% if client.complemento %}
+            {{ complemento }},
         {% endif %}
         {{ client.bairro }},
         {{ client.cidade }},

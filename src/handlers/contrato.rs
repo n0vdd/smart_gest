@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{borrow::Borrow, sync::Arc};
 
 use axum::{extract::Path, response::{IntoResponse, Redirect}, Extension};
 use axum_extra::{extract::Form, response::Html};
@@ -8,7 +8,7 @@ use tera::{Context, Tera};
 use tokio::{fs::{DirBuilder, File}, io::AsyncWriteExt, process::Command};
 use tracing::error;
 
-use crate::models::contrato::{ClienteContractData, ContratoDto, ContratoTemplate, ContratoTemplateDto};
+use crate::{models::contrato::{ClienteContractData, ContratoDto, ContratoTemplate, ContratoTemplateDto}, TEMPLATES};
 
 pub async fn show_contrato_template_list(Extension(pool): Extension<Arc<PgPool>>) -> impl IntoResponse {
     let templates = query_as!(ContratoTemplate, "SELECT * FROM contratos_templates")
@@ -21,14 +21,7 @@ pub async fn show_contrato_template_list(Extension(pool): Extension<Arc<PgPool>>
     let mut context = Context::new();
     context.insert("templates", &templates);
 
-    let mut tera = Tera::default();
-    tera.add_template_file("templates/contrato_templat_list.html", Some("List contrato template")).map_err(|open_err| {
-        error!("Failed to open contrato template list: {:?}", open_err);
-        anyhow::anyhow!("Failed to open contrato template list")
-    }).expect("Failed to open contrato template list");
-
-    let template = tera
-        .render("List contrato template", &context)
+    let template = TEMPLATES .render("contrato_template_list.html", &context)
         .map_err(|e| {
             error!("Failed to render contrato template list: {:?}", e);
             anyhow::anyhow!("Failed to render contrato template list")
@@ -40,13 +33,7 @@ pub async fn show_contrato_template_list(Extension(pool): Extension<Arc<PgPool>>
 //in the bottom of the form it should show what data can be used on the template like 
 //{{ date }} {{ cliente.nome }} etc,etc
 pub async fn show_contrato_template_add_form() -> impl IntoResponse {
-    let mut tera = Tera::default();
-    tera.add_template_file("templates/contrato_template_add_form.html", Some("Add contrato template")).map_err(|open_err| {
-        error!("Failed to open contrato template add form: {:?}", open_err);
-        anyhow::anyhow!("Failed to open contrato template add form")
-    }).expect("Failed to open contrato template add form");
-
-    let template = tera.render("Add contrato template", &Context::new())
+    let template = TEMPLATES.render("contrato_template_add_form.html", &Context::new())
         .map_err(|e| {
             error!("Failed to render contrato template add form: {:?}", e);
             anyhow::anyhow!("Failed to render contrato template add form")
@@ -77,13 +64,8 @@ pub async fn show_contrato_template_edit_form(Extension(pool):Extension<Arc<PgPo
     context.insert("data", &data);
     context.insert("template", &template);
 
-    let mut tera = Tera::default();
-    tera.add_template_file("templates/contrato_template_edit_form.html", Some("Edit contrato template")).map_err(|open_err| {
-        error!("Failed to open contrato template edit form: {:?}", open_err);
-        anyhow::anyhow!("Failed to open contrato template edit form")
-    }).expect("Failed to open contrato template edit form");
 
-    let template = tera.render("Edit contrato template",&context)
+    let template = TEMPLATES.render("contrato_template_edit.html",&context)
         .map_err(|e| {
             error!("Failed to render contrato template edit form: {:?}", e);
             anyhow::anyhow!("Failed to render contrato template edit form")
@@ -116,6 +98,14 @@ pub async fn add_contrato_template(Extension(pool):Extension<Arc<PgPool>>,
         error!("Failed to save template to database: {:?}", e);
         anyhow::anyhow!("Failed to save template to database")
     }).expect("Failed to save template to database");
+
+    //After adding a new template we need to reload the templates
+    //So that we can latter render it
+    let mut templates = TEMPLATES.clone();
+    templates.full_reload().map_err(|e| {
+        error!("Failed to reload templates: {:?}", e);
+        anyhow::anyhow!("Failed to reload templates")
+    }).expect("Failed to reload templates");
 
     Redirect::to("/contrato")
 }

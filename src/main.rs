@@ -24,12 +24,14 @@ use radius::{create_radius_cliente_pool, create_radius_plano_bloqueado};
 use services::voip::checa_voip_down;
 use services::webhooks::webhook_handler;
 use sqlx::PgPool;
+use tera::Tera;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::{debug, error, info};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
+use lazy_static::lazy_static;
 use std::sync::Arc;
 
 // Define allowed IPs
@@ -43,6 +45,23 @@ static ALLOWED_IPS: Lazy<Vec<IpAddr>> = Lazy::new(|| {
         IpAddr::V4(Ipv4Addr::new(54, 94, 35, 137)),
     ]
 });
+
+lazy_static! {
+    pub static ref TEMPLATES: Tera = {
+    let tera = match Tera::new("templates/**/*") {
+        Ok(t) => t,
+        Err(e) => {
+            error!("template parsing error(s): {}", e);
+            ::std::process::exit(1);
+        }
+    };
+    //there is autoescape for html by default
+    //tera.autoescape_on(vec![".html", ".sql"]);
+    //tera.register_filter("do_nothing", do_nothing_filter);
+    tera
+    };
+}
+
 
 // Define the valid access token
 static VALID_ACCESS_TOKEN: &str = "m+/t\"]9lhtyh{2}s&%Wt";    

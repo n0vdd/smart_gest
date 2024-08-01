@@ -1,4 +1,4 @@
-{% extends "snippets/base.html" %}
+<!--{% extends "snippets/base.html" %}
 
 {% block title %}Edit Client{% endblock %}
 
@@ -9,7 +9,7 @@
         <div class="mb-4">
             <label for="tipo" class="block text-gray-700 text-sm font-bold mb-2">Tipo:</label>
             <select id="tipo" name="tipo" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                <!--TODO can process this on rust and pass the value? -->
+                TODO can process this on rust and pass the value? 
                 <option value="PessoaFisica" {% if self.is_pessoa_fisica() %}selected{% endif %}>Pessoa Física</option>
                 <option value="PessoaJuridica" {% if self.is_pessoa_juridica() %}selected{% endif %}>Pessoa Jurídica</option>
             </select>
@@ -47,11 +47,10 @@
                     <label for="rua" class="block text-gray-700 text-sm font-bold mb-2">Rua:</label>
                     <input type="text" id="rua" name="rua" value="{{ client.rua }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                 </div>
-                <!--TODO remove if let some for a more agnostic templating code-->
                 <div class="mb-4">
                     <label for="numero" class="block text-gray-700 text-sm font-bold mb-2">Número:</label>
-                    {% if let Some(numero) = client.numero %}
-                        <input type="text" id="numero" name="numero" value="{{ numero }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    {% if client.numero is defined %}
+                        <input type="text" id="numero" name="numero" value="{{ client.numero }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                     {% else %}
                         <input type="text" id="numero" name="numero" value="" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                     {% endif %}
@@ -64,8 +63,8 @@
 
                 <div class="mb-4">
                     <label for="complemento" class="block text-gray-700 text-sm font-bold mb-2">Complemento:</label>
-                    {% if let Some(complemento) = client.complemento %}
-                        <input type="text" id="complemento" name="complemento" value="{{ complemento }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    {% if client.complemento is defined%}
+                        <input type="text" id="complemento" name="complemento" value="{{ client.complemento }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                     {% else %}
                         <input type="text" id="complemento" name="complemento" value="" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                     {% endif %}
@@ -90,8 +89,9 @@
 
         <div class="mb-4">
             <label for="login" class="block text-gray-700 text-sm font-bold mb-2">Login:</label>
-            {% if let Some(login) = client.login %}
-                <input type="text" id="login" name="login" value="{{ login }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            TODO this is not a optional value
+            {% if client.login is defined %}
+                <input type="text" id="login" name="login" value="{{ client.login }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
             {% else %}
                 <input type="text" id="login" name="login" value="" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
             {% endif %}
@@ -99,7 +99,8 @@
 
         <div class="mb-4">
             <label for="senha" class="block text-gray-700 text-sm font-bold mb-2">Senha:</label>
-            {% if let Some(senha) = client.senha %}
+            //TODO this is not an optional value
+            {% if client.senha is defined %}
                 <input type="password" id="senha" name="senha" value="{{ senha }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
             {% else %}
                 <input type="password" id="senha" name="senha" value="" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
@@ -115,8 +116,9 @@
             <label for="mikrotik_id" class="block text-gray-700 text-sm font-bold mb-2">Mikrotik:</label>
             <select id="mikrotik_id" name="mikrotik_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                 {% for mikrotik in mikrotik_options %}
-                    {% if let Some(mikrotik_id) = client.mikrotik_id%}
-                        <option value="{{ mikrotik.id }}" {% if mikrotik_id == mikrotik.id %}selected{% endif %}>{{ mikrotik.nome }}</option>
+                    TODO this is not and optional value
+                    {% if client.mikrotik_id is defined%}
+                        <option value="{{ mikrotik.id }}" {% if client.mikrotik_id == mikrotik.id %}selected{% endif %}>{{ mikrotik.nome }}</option>
                     {% else %}
                         <option value="{{ mikrotik.id }}">{{ mikrotik.nome }}</option>
                     {% endif %}
@@ -128,8 +130,9 @@
             <label for="plan_id" class="block text-gray-700 text-sm font-bold mb-2">Planos:</label>
             <select id="plan_id" name="plan_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                 {% for plan in plan_options %}
-                    {% if let Some(plan_id) = client.plano_id %}
-                        <option value="{{ plan.id }}" {% if plan_id == plan.id %}selected{% endif %}>{{ plan.nome }}</option>
+                    TODO this is not an optional value
+                    {% if client.plano_id is defined %}
+                        <option value="{{ plan.id }}" {% if client.plano_id == plan.id %}selected{% endif %}>{{ plan.nome }}</option>
                     {% else %}
                         <option value="{{ plan.id }}">{{ plan.nome }}</option>
                     {% endif %}
@@ -145,3 +148,4 @@
     <div id="response"></div>
 </div>
 {% endblock %}
+-->

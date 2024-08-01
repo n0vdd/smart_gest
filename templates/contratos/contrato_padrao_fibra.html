@@ -47,10 +47,10 @@
     <p><strong>{{ client.nome }}</strong></p>
     <p>
         {{ client.rua }}, 
-        {% if client.numero is defined %}
+        {% if client.numero %}
             {{ client.numero }},
         {% endif %}
-        {% if client.complemento is defined %}
+        {% if client.complemento %}
             {{ client.complemento }},
         {% endif %}
         {{ client.bairro }},

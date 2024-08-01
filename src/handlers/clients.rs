@@ -10,7 +10,7 @@ use std::sync::Arc;
 use sqlx::{query, query_as, PgPool};
 
 
-use crate::{models::{client::{Cliente, ClienteDto, SimpleCliente, TipoPessoa}, mikrotik::Mikrotik, plano::Plano}, services::webhooks::add_cliente_to_asaas};
+use crate::{models::{client::{Cliente, ClienteDto, SimpleCliente, TipoPessoa}, mikrotik::Mikrotik, plano::Plano}, services::webhooks::add_cliente_to_asaas, TEMPLATES};
 
 async fn get_all_clientes(pool: &PgPool) -> Result<Vec<SimpleCliente>, anyhow::Error> {
     query_as!(SimpleCliente, "SELECT id,login FROM clientes")
@@ -36,16 +36,11 @@ pub async fn show_cliente_list(
             return Html("<p>Failed to fetch clients</p>".to_string())
         }).expect("Failed to fetch clients");
 
-    let mut tera = Tera::default();
-    tera.add_template_file("templates/cliente_list.html", Some("cliente list")).map_err(|e| {
-        error!("Failed to add template file: {:?}", e);
-        return Html("<p>Failed to add template file</p>".to_string())
-    }).expect("Failed to add template file");
 
     let mut context = tera::Context::new();
     context.insert("clients", &clients);
 
-    let template = tera.render("cliente list", &context).map_err(|e| -> _ {
+    let template = TEMPLATES.render("cliente_list.html", &context).map_err(|e| -> _ {
         error!("Failed to render client list template: {:?}", e);
         return Html("<p>Failed to render client list template</p>".to_string())
     }).expect("Failed to render client list template");
@@ -189,18 +184,12 @@ pub async fn show_cliente_form(
             debug!("Failed to fetch Planos: {:?}", e);
             Html("<p>Failed to fetch all Planos</p>".to_string())
         }).expect("Failed to fetch Planos");
-    
-    let mut tera = Tera::default();
-    tera.add_template_file("templates/cliente_add.html", Some("cliente list")).map_err(|e| {
-        error!("Failed to add template file: {:?}", e);
-        return Html("<p>Failed to add template file</p>".to_string())
-    }).expect("Failed to add template file");
 
     let mut context = tera::Context::new();
     context.insert("mikrotik_options", &mikrotik_list);
     context.insert("plan_options", &plan_list);
 
-    let template = tera.render("cliente_add", &context).map_err(|e| -> _ {
+    let template = TEMPLATES.render("cliente_add.html", &context).map_err(|e| -> _ {
         error!("Failed to render client form template: {:?}", e);
         return Html("<p>Failed to render client form template</p>".to_string())
     }).expect("Failed to render client form template");

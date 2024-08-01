@@ -5,11 +5,11 @@ use cpf::Cpf;
 use phonenumber::country::Id::BR;
 use reqwest::Client;
 use serde::Deserialize;
-use tera::Tera;
+use tera::{Context, Tera};
 use thiserror::Error;
 use tracing::{debug, error};
 
-use crate::models::{client::TipoPessoa, endereco::EnderecoDto};
+use crate::{models::{client::TipoPessoa, endereco::EnderecoDto}, TEMPLATES};
 
 
 
@@ -90,15 +90,8 @@ pub async fn lookup_cep(
 
 //Mosta o snippet do endereco sem os dados
 pub async fn show_endereco() -> Html<String> {
-    let mut tera = Tera::default();
-    tera.add_template_file("templates/snippets/endereco_snippet.html", Some("endereco_snippet")).map_err(|e| {
-        error!("Failed to open template file: {:?}", e);
-        return Html("Failed to open template file".to_string())
-    }).expect("Failed to open template file");
 
-    let context = tera::Context::new();
-
-    let template = tera.render("endereco_snippet", &context).map_err(|e| -> _ {
+    let template = TEMPLATES.render("endereco_snippet.html",&Context::new()).map_err(|e| -> _ {
         error!("Failed to render endereco snippet: {:?}", e);
         return Html("Failed to render endereco snippet".to_string())
     }).expect("Failed to render endereco snippet");
@@ -135,11 +128,8 @@ pub async fn validate_cpf_cnpj(
     Query(cpf_cnpj): Query<CpfCnpjQuery>,
 ) -> Html<String> {
     debug!("Validating CPF/CNPJ: {:?}", cpf_cnpj.formatted_cpf_cnpj);
-    let mut tera = Tera::default();
-    tera.add_template_file("templates/cpf_cnpj_snippet.html", Some("cpf_cnpj")).expect("Failed to open template file");
     let mut context = tera::Context::new();
     context.insert("cpf_cnpj", &cpf_cnpj.formatted_cpf_cnpj);
-
 
     match cpf_cnpj.tipo {
         TipoPessoa::PessoaFisica => {
@@ -152,7 +142,7 @@ pub async fn validate_cpf_cnpj(
 
             context.insert("formatted_cpf_cnpj", &formatted);
 
-            let template = tera.render("cpf_cnpj", &context).map_err(|e| -> _ {
+            let template = TEMPLATES.render("cpf_cnpj", &context).map_err(|e| -> _ {
                 error!("Failed to render CPF/CNPJ snippet: {:?}", e);
                 return Html("Failed to render CPF/CNPJ snippet".to_string())
             }).expect("Failed to render CPF/CNPJ snippet");
@@ -169,7 +159,7 @@ pub async fn validate_cpf_cnpj(
 
             context.insert("formatted_cpf_cnpj", &formatted);
 
-            let template = tera.render("cpf_cnpj", &context).map_err(|e| -> _ {
+            let template = TEMPLATES.render("cpf_cnpj", &context).map_err(|e| -> _ {
                 error!("Failed to render CPF/CNPJ snippet: {:?}", e);
                 return Html("Failed to render CPF/CNPJ snippet".to_string())
             }).expect("Failed to render CPF/CNPJ snippet");

@@ -6,18 +6,12 @@ use tracing::{debug, error};
 use std::{net::Ipv4Addr,  str::FromStr, sync::Arc};
 use sqlx::{ query, query_as, PgPool};
 
-use crate::models::{client::Cliente, mikrotik::{Mikrotik, MikrotikDto}, plano::Plano};
+use crate::{models::{client::Cliente, mikrotik::{Mikrotik, MikrotikDto}, plano::Plano}, TEMPLATES};
 
 
 pub async fn show_mikrotik_form() -> Html<String> {
-    let mut tera = Tera::default();
 
-    tera.add_template_file("templates/mikrotik_add.html", Some("mikrotik add")).map_err(|e| {
-        error!("Failed to add template file: {:?}", e);
-        return Html("<p>Failed to add template file</p>".to_string())
-    }).expect("Failed to add template file");
-
-    let template = tera.render("mikrotik_add", &tera::Context::new()).map_err(|e| {
+    let template = TEMPLATES.render("mikrotik_add.html", &tera::Context::new()).map_err(|e| {
         error!("Failed to render template: {:?}", e);
         return Html("<p>Failed to render template</p>".to_string())
     }).expect("Failed to render template");
@@ -188,17 +182,10 @@ pub async fn show_mikrotik_list(
             return Html("<p>Failed to fetch Mikrotik</p>".to_string())
         }).expect("Failed to fetch Mikrotik");
 
-    let mut tera = Tera::default();
-
-    tera.add_template_file("templates/mikrotik_list.html", Some("mikrotik list")).map_err(|e| {
-        error!("Failed to add template file: {:?}", e);
-        return Html("<p>Failed to add template file</p>".to_string())
-    }).expect("Failed to add template file");
-
     let mut context = tera::Context::new(); 
     context.insert("mikrotik_options", &mikrotik_list);
 
-    let template = tera.render("mikrotik list", &context).map_err(|e| {
+    let template = TEMPLATES.render("mikrotik_list.html", &context).map_err(|e| {
         error!("Failed to render template: {:?}", e);
         return Html("<p>Failed to render template</p>".to_string())
     }).expect("Failed to render template");
@@ -222,16 +209,10 @@ pub async fn show_mikrotik_edit_form(
             return Html("<p>Failed to fetch Mikrotik</p>".to_string())
         }).expect("Failed to fetch Mikrotik");
 
-    let mut tera = Tera::default();
-
-    tera.add_template_file("templates/mikrotik_edit.html", Some("mikrotik edit")).map_err(|e| {
-        error!("Erro ao adicionar mikrotik_list template a instancia do Tera {e}");
-    }).expect("Erro ao adicionar template ao tera");
-
     let mut context = Context::new();
     context.insert("mikrotik", &mikrotik);
 
-    let template = tera.render("mikrotik edit",&context).map_err(|e| {
+    let template = TEMPLATES.render("mikrotik_edit.html",&context).map_err(|e| {
         error!("Falha ao renderizar template de edicao do mikrotik {:?}",e);
     }).expect("falha ao renderizar mikrotik_edit template");
 

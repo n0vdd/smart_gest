@@ -2,12 +2,11 @@
 on template (start from the previous months from the month we are in) -->
 
 <!--TODO list with all dici generated until now with a button to delete them and another to download it-->
-{% extends "base" %}
+{% extends "snippets/base.html" %}
 
 {% block title %}DICI{% endblock %}
 
 {% block content %}
-
 <div class="bg-white p-6 rounded-lg shadow-lg">
     <h2 class="text-2xl font-semibold mb-4">Gerenciar DICI</h2>
         <div>
@@ -45,7 +44,7 @@ on template (start from the previous months from the month we are in) -->
                     <tr>
                         <td class="border px-4 py-2">{{ dici.reference_date }}</td>
                         <!--BUG nao sei se is defined ira considerar NONE como nao definido-->
-                        {% if dici.created_at is defined %}
+                        {% if dici.created_at %}
                             <td class="border px-4 py-2">{{ dici.created_at }}</td>
                         {% endif %}
 
@@ -61,4 +60,4 @@ on template (start from the previous months from the month we are in) -->
         </div>
     </div>
 </div>
-{% endblock %}
+{% endblock content %}

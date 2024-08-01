@@ -10,11 +10,15 @@ use time::{macros::format_description, Date };
 use tokio::{fs::File, io::AsyncWriteExt};
 use tracing::{error,debug};
 
-use crate::models::{client::TipoPessoa, dici::{Dici, GenerateDiciForm}};
+use crate::{models::{client::TipoPessoa, dici::{Dici, GenerateDiciForm}}, TEMPLATES};
 
 use super::clients::fetch_tipo_clientes_before_date;
 
+//TODO get this from the provedor table
 const CNPJ:&str = "48530335000148"; // Hardcoded CNPJ
+//this data should be obrigatory for the provedor to generate nota fiscal
+//TODO do a check if this data exists before generating the DICI
+//if not returns a error
 const COD_IBGE:&str = "3106200"; // Hardcoded COD_IBGE
 
 
@@ -39,7 +43,7 @@ pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
   let mut context = tera::Context::new(); 
   context.insert("dicis", &dicis);
 
-  let template = Tera::new("templates/**/*").expect("Failed to parse templates").render("dici_list.html", &context)
+  let template = TEMPLATES.render("dici_list.html", &context)
     .map_err(|e| {
       error!("Failed to render template: {:?}", e);
     }).expect("Failed to render template");

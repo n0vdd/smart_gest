@@ -1,6 +1,6 @@
 {% extends "snippets/base.html" %}
 
-{% block title %}Edit Plano{% endblock %}
+{% block title %}Edit Plano{% endblock title %}
 
 {% block content %}
 <h1 class="text-2xl font-bold mb-4">Edit Plano</h1>
@@ -30,7 +30,7 @@
         <div class="mb-4">
             <label for="descricao" class="block text-gray-700 text-sm font-bold mb-2">Descrição:</label>
             <!--TODO remove if let some for a more agnostic templating code-->
-            {% if plano.descricao is defined %}
+            {% if plano.descricao %}
                 <textarea id="descricao" name="descricao" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">{{ plano.descricao }}</textarea>
             {% else %}
                 <textarea id="descricao" name="descricao" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"></textarea>
@@ -56,4 +56,4 @@
     </form>
     <div id="response"></div>
 </div>
-{% endblock %}
+{% endblock content %}

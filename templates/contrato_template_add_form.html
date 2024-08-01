@@ -17,10 +17,11 @@
 -->
 {% extends "snippets/base.html" %}
 
+{% block title %}Adicionar Template de Contrato{% endblock title%}
+
 {% block content %}
     <h1>Adicionar Template de Contrato</h1>
     <form method="post">
-        {% csrf_token %}
         <div class="form-group row">
             <label for="contrato_template_nome" class="col-sm-2 col-form-label">Nome do Contrato</label>
             <div class="col-sm-10">
@@ -54,4 +55,4 @@
             </div>
         <button type="submit" class="btn btn-primary">Adicionar</button>
     </form>
-{% endblock %}
+{% endblock content%}

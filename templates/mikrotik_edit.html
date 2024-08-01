@@ -1,6 +1,6 @@
 {% extends "snippets/base.html" %}
 
-{% block title %}Edit Mikrotik{% endblock %}
+{% block title %}Edit Mikrotik{% endblock title%}
 
 {% block content %}
 <h1 class="text-2xl font-bold mb-4">Edit Mikrotik</h1>
@@ -24,7 +24,7 @@
 
         <div class="mb-4">
             <label for="max_clientes" class="block text-gray-700 text-sm font-bold mb-2">Max Clients:</label>
-            <input type="number" id="max_clientes" name="max_clientes" value="{% if mikrotik.max_clientes is defined%}{{ mikrotik.max_clientes }}{% endif %}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            <input type="number" id="max_clientes" name="max_clientes" value="{% if mikrotik.max_clientes %}{{ mikrotik.max_clientes }}{% endif %}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
         </div>
 
         <div class="flex items-center justify-between">
@@ -32,4 +32,4 @@
         </div>
     </form>
 </div>
-{% endblock %}
+{% endblock content %}
