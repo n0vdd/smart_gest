@@ -3,7 +3,7 @@ mod handlers;
 mod services;
 mod models;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use axum::extract::Request;
 use axum::http;
 use axum::middleware::Next;
@@ -114,7 +114,7 @@ async fn check_access_token(req: Request,next: Next) -> Result<impl IntoResponse
 //will also generate dici for the previous month and send a notification to a telegram channel
 //on day 12 will check what clientes have not payd and block them
 //when we receive the payment we will unblock the cliente, so there is no need to check again
-async fn scheduler(pool: Arc<PgPool>) {
+async fn scheduler(pool: Arc<PgPool> ) -> Result<(), anyhow::Error> {
     let expression = "0 0 0 1,12 * *"; // Run at midnight on the 1st and 12th of every month
     let schedule = Schedule::from_str(expression).expect("Invalid cron expression for scheduler");
 
@@ -131,7 +131,8 @@ async fn scheduler(pool: Arc<PgPool>) {
             tokio::time::sleep(duration.to_std().unwrap()).await;
         }
 
-        checa_voip_down().await.unwrap();
+        checa_voip_down().await.context("Erro ao checar voip")?;
+        info!("Voip check executed on {}", next);
     }
 
     let mut upcoming = schedule.upcoming(Utc);
@@ -168,6 +169,7 @@ async fn scheduler(pool: Arc<PgPool>) {
 
         info!("Task executed on {}", next);
     }
+    Ok(())
 }
 
 #[tokio::main]
@@ -201,7 +203,6 @@ async fn main() {
         error!("Failed to create radius plano bloqueado: {:?}", e);
         panic!("Failed to create radius plano bloqueado")
     }).expect("Failed to create radius plano bloqueado");
-
 
     //BUG this is running all the time 
     tokio::spawn(scheduler(pg_pool.clone()));
