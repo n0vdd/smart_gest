@@ -21,11 +21,13 @@ use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edi
 use handlers::utils::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
 use once_cell::sync::Lazy;
 use radius::{create_radius_cliente_pool, create_radius_plano_bloqueado};
+use services::nfs::exporta_nfs;
 use services::voip::checa_voip_down;
 use services::webhooks::webhook_handler;
 use sqlx::PgPool;
 use tera::Tera;
 use tokio::net::TcpListener;
+use tokio::process::Command;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::{debug, error, info};
@@ -119,7 +121,7 @@ async fn scheduler(pool: Arc<PgPool> ) -> Result<(), anyhow::Error> {
     let schedule = Schedule::from_str(expression).expect("Invalid cron expression for scheduler");
 
     //TODO a expression that will run everyday at 4am
-    let daily = "0 4 0 * * *";
+    let daily = "0 5 0 * * *";
     let daily_schedule = Schedule::from_str(&daily).unwrap();
 
     let mut day_to_come = daily_schedule.upcoming(Utc);
@@ -155,6 +157,9 @@ async fn scheduler(pool: Arc<PgPool> ) -> Result<(), anyhow::Error> {
                     error!("Failed to generate dici: {:?}", e);
                     anyhow!("Failed to generate dici")
                 }).expect("Erro ao gerar dici");
+
+                //Esta salvando para downloads, preciso especificar o local dos downloads
+                exporta_nfs(&pool).await.context("Erro ao exportar NFS")?;
             }
             12 => {
                 bloqueia_clientes_atrasados(&pool).await.map_err(|e| {
@@ -176,6 +181,12 @@ async fn scheduler(pool: Arc<PgPool> ) -> Result<(), anyhow::Error> {
 async fn main() {
     dotenv::dotenv().ok();
     tracing_subscriber::fmt::init();
+    //Inicia o chromedriver para ser usado pelos processos de automacao
+    //nota fiscal
+    Command::new("chromedriver").spawn().map_err(|e| {
+        error!("Failed to start chromedriver: {:?}", e);
+        panic!("Failed to start chromedriver")
+    }).expect("Failed to start chromedriver");
 
     //Setup db
     let pg_pool = Arc::new(create_postgres_pool().await
@@ -183,6 +194,7 @@ async fn main() {
         error!("erro ao criar pool: {:?}", e);
         panic!("erro ao criar pool")
     }).expect("erro ao criar pool"));
+
     info!("postgres pool:{:?} criado",pg_pool);
 
     /* 

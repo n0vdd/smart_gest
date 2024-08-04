@@ -133,7 +133,7 @@ pub async fn webhook_handler(
                   e
                }).expect("Erro ao buscar cliente");
 
-               gera_nfs(&cliente,webhook_data.payment_data.net_value).await;
+               gera_nfs(&cliente,webhook_data.payment_data.net_value).await.expect("erro ao gerar nota fiscal");
 
                if checa_cliente_bloqueado_radius(&cliente.nome).await.map_err(|e| {
                   error!("Failed to check if client is blocked: {:?}", e);
