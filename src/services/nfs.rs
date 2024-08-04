@@ -15,10 +15,15 @@ const ID_CNAE: &str = "117019000";
 const DESCRICAO: &str = "Serviço de internet";
 
 
-use fantoccini::{Client, ClientBuilder, Locator};
-use tracing::{debug, error};
+use std::{path::PathBuf, time::SystemTime};
 
-use crate::models::client::Cliente;
+use anyhow::Context;
+use chrono::Local;
+use fantoccini::{Client, ClientBuilder, Locator};
+use tokio::fs::{create_dir, create_dir_all, read_dir, rename};
+use tracing::{debug, error, warn};
+
+use crate::models::client::{Cliente, ClienteNf};
 
 
 //TODO cancela nota fiscal
@@ -71,11 +76,37 @@ pub async fn exporta_nfs(month:i32,year:i32) {
 
 }
 
+//TODO set download dir for chromedriver
+async fn setup_chromedriver_gera_nfs(nome:&str) -> serde_json::Map<String,serde_json::Value> {
+    let download_dir = format!("/home/user/code/smart_gest/nota_fiscal/{}/",nome);
+    //BUG check the path, you dont want to create /home/user/code/smart_gest just the nota_fiscal/{nome}
+    //but there is a need to specify the full path for chromedriver
+    create_dir_all(&download_dir).await.expect("Erro ao criar diretorio de download");
+
+    let mut caps = serde_json::Map::new();
+    //TODO should do this for all the clients
+    caps.insert("goog:chromeOptions".to_string(), serde_json::json!({
+        //"args": ["--headless", "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage"],
+        "prefs": {
+            "download.default_directory": download_dir,
+            "download.prompt_for_download": false,
+            "download.directory_upgrade": true,
+            "safebrowsing.enabled": true
+        }
+    }));
+    caps
+}
+
 //TODO gera nota fiscal para os clientes que tiverem o pagamento confirmado
 //TODO pegar os valores para o scraper usando f12
-pub async fn gera_nfs(cliente:&Cliente,value:f32) {
-
-    let client = ClientBuilder::native().connect("http://localhost:9515").await.map_err(|e| {
+pub async fn gera_nfs(cliente:&ClienteNf,value:f32) {
+    if cliente.gera_nf == false {
+        return;
+    }
+    let caps = setup_chromedriver_gera_nfs(&cliente.nome).await;
+    let client = ClientBuilder::native()
+    .capabilities(caps)
+    .connect("http://localhost:9515").await.map_err(|e| {
         error!("failed to connect to WebDriver: {:?}", e);
         e
     }).expect("failed to connect to WebDriver");
@@ -107,10 +138,64 @@ pub async fn gera_nfs(cliente:&Cliente,value:f32) {
 
     dados_nfs(&cliente, &client, value).await;
 
+    salvar_nota_fiscal(&client, &cliente.nome).await.expect("failed to save nota fiscal");
+    //salvar nota fiscal,should change the name, but since i dont ask for the path i will need to rename it i think
+
     //enviar e rececer a nota fiscal
     //salvar a mesma para o sistema de arquivos
     //caminho: notas_fiscais/{cliente_nome}/{data}.pdf
     //e salvar um o pagamento relacionado,o caminho e a data no banco de dados
+}
+
+//the chromedriver will save to nota_fiscal/{cliente_nome} already
+//will need to get the last modified file and rename it to the date
+async fn salvar_nota_fiscal(client:&Client,nome:&str) -> Result<(),anyhow::Error> {
+    //BUG maybe this doesnt match id
+    client.wait().for_element(Locator::Css("#BUTTON2.btnimprimir")).await.context("failed to find imprimir button")?;
+
+    client.find(Locator::Css("#BUTTON2.btnimprimir")).await.context("failed to find imprimir button")?
+    .click()
+    .await.context("failed to click imprimir button")?;
+
+    //maybe this will already save the pdf, if not will need to click on the save button
+    client.wait().for_element(Locator::Css("cr-button.action-button")).await.context("failed to find salvar button")?;
+
+    client.find(Locator::Css("cr-button.action-button")).await.context("failed to find salvar button")?
+    .click()
+    .await.context("failed to click salvar button")?;
+
+    //caminho: notas_fiscais/{cliente_nome}/{data}.pdf
+    //e salvar um o pagamento relacionado,o caminho e a data no banco de dados
+    let path = format!("nota_fiscal/{}/",nome);
+    let mut dir = read_dir(&path).await.context("failed to read dir")?;
+    // Variables to track the last modified file
+    let mut last_modified_file: Option<(PathBuf, SystemTime)> = None;
+
+    while let Some(entry) = dir.next_entry().await.context("Failed to get next entry")? {
+        let metadata = entry.metadata().await.context("Failed to get metadata")?;
+        let modified_time = metadata.modified().context("Failed to get modified time")?;
+
+        match last_modified_file {
+            Some((_, last_modified_time)) => {
+                if modified_time > last_modified_time {
+                    last_modified_file = Some((entry.path().clone(), modified_time));
+                }
+            }
+            None => {
+                last_modified_file = Some((entry.path().clone(), modified_time));
+            }
+        }
+        // Rename the last modified file to include the current date
+        if let Some((last_file_path, _)) = last_modified_file.clone() {
+            let current_date = Local::now().format("%d-%m-%Y").to_string();
+            let new_file_name = format!("{}/{}.pdf", path, current_date);
+            rename(&last_file_path, &new_file_name).await.context("Failed to rename file")?;
+        } else {
+            warn!("No files found in the directory.");
+        }
+    }
+
+    Ok(())
 }
 
 async fn input_cliente(client: &Client,cpf_cnpj: &str) {
@@ -172,7 +257,7 @@ async fn input_cliente(client: &Client,cpf_cnpj: &str) {
     }).expect("failed to click button");
 }
 
-async fn dados_nfs(cliente:&Cliente,client: &Client,value:f32) {
+async fn dados_nfs(cliente:&ClienteNf,client: &Client,value:f32) {
     client.wait().for_element(Locator::Css("#vCTBRAZSOC")).await.map_err(|e| {
         error!("failed to find Razão Social input element: {:?}", e);
         e

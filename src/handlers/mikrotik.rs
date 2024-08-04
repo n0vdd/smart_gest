@@ -93,22 +93,17 @@ pub async fn failover_radius_script(Path(mikrotik_id):Path<i32>,Extension(pool):
             .map(|plano_name| { plano_name.nome.clone() })
             .expect("impossivel achar plano");
 
-        //Get the login and senha, escape problematic characters and add the cliente to the mikrotik script
-        if let Some(login) = cliente.login.as_ref() {
-            // \$	Output $ character. Otherwise $ is used to link variable.
-            // \?	Output ? character. Otherwise ? is used to print "help" in console.
-            // \_	- space
-            //TODO escape mikrotik problem chars for login and senha
-            //We use \\ because the first escapes the second as a rust string
-            let login = login.replace("$","\\$").replace("?","\\?").replace(" ","\\_");
-            if let Some(senha) = cliente.senha.as_ref() {
-                let senha = senha.replace("$","\\$").replace("?","\\?").replace(" ","\\_");
-                commands.push_str(format!(r#"/ppp/secret/add name="{}" password="{}" profile="{}" service=pppoe comment="smart_gest" disabled=yes
-                "#,
-                    login,senha,plano_name).as_str());
-            }
+        // \$	Output $ character. Otherwise $ is used to link variable.
+        // \?	Output ? character. Otherwise ? is used to print "help" in console.
+        // \_	- space
+        //TODO escape mikrotik problem chars for login and senha
+        //We use \\ because the first escapes the second as a rust string
+        let login = cliente.login.replace("$","\\$").replace("?","\\?").replace(" ","\\_");
+        let senha = cliente.senha.replace("$","\\$").replace("?","\\?").replace(" ","\\_");
+        commands.push_str(format!(r#"/ppp/secret/add name="{}" password="{}" profile="{}" service=pppoe comment="smart_gest" disabled=yes
+        "#,
+        login,senha,plano_name).as_str());
         }
-    }
     commands
 }
 

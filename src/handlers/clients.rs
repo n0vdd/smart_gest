@@ -21,6 +21,21 @@ async fn get_all_clientes(pool: &PgPool) -> Result<Vec<SimpleCliente>, anyhow::E
         })
 }
 
+pub async fn bloqueia_cliente_no_radius(Extension(pool):Extension<Arc<PgPool>>,Path(id): Path<i32>) -> impl IntoResponse {
+    let login = query!("SELECT login FROM clientes WHERE id = $1",id)
+        .fetch_one(&*pool)
+        .await.map_err(|e| {
+            error!("Failed to fetch login: {:?}", e);
+            anyhow::anyhow!("Failed to fetch login")
+        }).expect("Erro ao buscar login");
+
+    bloqueia_cliente_radius(&login.login).await.map_err(|e| {
+        error!("Failed to block cliente: {:?}", e);
+        anyhow::anyhow!("Failed to block cliente")
+    }).expect("Erro ao bloquear cliente");
+
+    Redirect::to("/cliente")
+}
 
 //Get all the clientes from the db
 //Render the template with the clientes
@@ -131,7 +146,7 @@ pub async fn update_cliente(
         "UPDATE clientes SET tipo = $1, nome = $2, email = $3, cpf_cnpj = $4, formatted_cpf_cnpj = $5,
         telefone = $6, login = $7, senha = $8, cep = $9, rua = $10, numero = $11, bairro = $12,
         complemento = $13, cidade = $14, estado = $15, ibge_code = $16, mikrotik_id = $17,
-        plano_id = $18 WHERE id = $19",
+        plano_id = $18, gera_nf = $19, gera_dici = $20, add_to_asaas = $21 WHERE id = $22",
         client.tipo,
         client.nome,
         client.email,
@@ -150,6 +165,9 @@ pub async fn update_cliente(
         client.ibge_code,
         client.mikrotik_id,
         client.plano_id,
+        client.gera_nf,
+        client.gera_dici,
+        client.add_to_asaas,
         client.id
     )
     .execute(&*pool)
@@ -259,9 +277,9 @@ pub async fn register_cliente(
     query!(
         "INSERT INTO clientes (
             tipo, nome, email, cpf_cnpj, formatted_cpf_cnpj, telefone, login, senha, 
-            mikrotik_id, plano_id, cep, rua, numero, bairro, complemento, cidade, estado, ibge_code
+            mikrotik_id, plano_id, cep, rua, numero, bairro, complemento, cidade, estado, ibge_code,gera_dici,gera_nf,add_to_asaas
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,$19,$20,$21
         )",
         client.tipo.as_bool(),
         client.nome,
@@ -283,7 +301,10 @@ pub async fn register_cliente(
         client.endereco.complemento,
         client.endereco.cidade,
         client.endereco.estado,
-        client.endereco.ibge
+        client.endereco.ibge,
+        client.gera_dici,
+        client.gera_nf,
+        client.add_to_asaas
     )
     .execute(&*pool).await.map_err(|e| {
         error!("Failed to insert client: {:?}", e);
@@ -340,15 +361,16 @@ impl ClienteEditTemplate<'_> {
 */
 
 
+//used for dici generation
 //param: date, a date to be compared on the db with the time the cliente was created
 //Selects the tipo of the cliente(Pessoa Fisica ou Juridica) for all the clientes created before the given date
 //Returns a List with all the tipos of the clientes created before the given date
-pub async fn fetch_tipo_clientes_before_date(
+pub async fn fetch_tipo_clientes_before_date_for_dici(
     pool: &PgPool,
     date: PrimitiveDateTime
 ) -> Result<Vec<TipoPessoa>,anyhow::Error> {
     //Get the tipo of the cliente created before a given data
-    let tipos = query!("SELECT tipo FROM clientes WHERE created_at < $1", date)
+    let tipos = query!("SELECT tipo FROM clientes WHERE created_at < $1 and gera_dici = false", date)
         .fetch_all(&*pool)
         .await.map_err(|e| -> _ {
             error!("Failed to fetch clients: {:?}", e);

@@ -64,17 +64,12 @@ pub async fn lookup_cep(
         };
 
         debug!("converted response to endereco: {:?}", endereco);
-        let mut tera = Tera::default();
-        tera.add_template_file("templates/snippets/endereco_snippet", Some("endereco snippet")).map_err(|e|  {
-            error!("Failed to open template file: {:?}", e);
-            return Html("Falha ao abrir o arquivo de template".to_string())
-        })?;
 
         let mut context = tera::Context::new();
         context.insert("endereco", &endereco);
 
         //TODO alterar o endereco snippet para usar endereco.cep etc
-        let template = tera.render("endereco snippet", &context).map_err(|e| -> _ {
+        let template = TEMPLATES.render("snippets/endereco_snippet.html", &context).map_err(|e| -> _ {
             error!("Failed to render endereco snippet: {:?}", e);
             return Html("Falha ao renderizar endereco snippet".to_string())
         })?;
@@ -91,7 +86,7 @@ pub async fn lookup_cep(
 //Mosta o snippet do endereco sem os dados
 pub async fn show_endereco() -> Html<String> {
 
-    let template = TEMPLATES.render("endereco_snippet.html",&Context::new()).map_err(|e| -> _ {
+    let template = TEMPLATES.render("snippets/endereco_snippet.html",&Context::new()).map_err(|e| -> _ {
         error!("Failed to render endereco snippet: {:?}", e);
         return Html("Failed to render endereco snippet".to_string())
     }).expect("Failed to render endereco snippet");
@@ -142,7 +137,7 @@ pub async fn validate_cpf_cnpj(
 
             context.insert("formatted_cpf_cnpj", &formatted);
 
-            let template = TEMPLATES.render("cpf_cnpj", &context).map_err(|e| -> _ {
+            let template = TEMPLATES.render("snippets/cpf_cnpj_snippet.html", &context).map_err(|e| -> _ {
                 error!("Failed to render CPF/CNPJ snippet: {:?}", e);
                 return Html("Failed to render CPF/CNPJ snippet".to_string())
             }).expect("Failed to render CPF/CNPJ snippet");
@@ -159,7 +154,7 @@ pub async fn validate_cpf_cnpj(
 
             context.insert("formatted_cpf_cnpj", &formatted);
 
-            let template = TEMPLATES.render("cpf_cnpj", &context).map_err(|e| -> _ {
+            let template = TEMPLATES.render("snippets/cpf_cnpj_snippet.html", &context).map_err(|e| -> _ {
                 error!("Failed to render CPF/CNPJ snippet: {:?}", e);
                 return Html("Failed to render CPF/CNPJ snippet".to_string())
             }).expect("Failed to render CPF/CNPJ snippet");

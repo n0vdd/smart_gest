@@ -11,6 +11,7 @@ pub struct PlanoDto {
     pub valor: f32,
     pub velocidade_up: i32,
     pub velocidade_down: i32,
+    pub tipo_pagamento: TipoPagamento,
     pub descricao: Option<String>,
     pub contrato_template_id: i32
 }

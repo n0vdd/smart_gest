@@ -79,7 +79,7 @@ pub async fn show_contrato_template_edit_form(Extension(pool):Extension<Arc<PgPo
 pub async fn add_contrato_template(Extension(pool):Extension<Arc<PgPool>>,
     Form(template): Form<ContratoTemplateDto>) -> impl IntoResponse {
     //Save the template to the filesystem
-    let path = format!("templates/contratos/{}", template.nome);
+    let path = format!("templates/contratos/{}.html", template.nome);
 
     File::create(&path).await.map_err(|e| {
         error!("Failed to create template file: {:?}", e);
@@ -107,7 +107,7 @@ pub async fn add_contrato_template(Extension(pool):Extension<Arc<PgPool>>,
         anyhow::anyhow!("Failed to reload templates")
     }).expect("Failed to reload templates");
 
-    Redirect::to("/contrato")
+    Redirect::to("/financeiro/contrato_template")
 }
 
 //Adiciona as templates usadas para gerar os contratos ao banco de dados

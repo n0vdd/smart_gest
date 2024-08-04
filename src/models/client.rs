@@ -15,6 +15,9 @@ pub struct ClienteDto {
     pub formatted_cpf_cnpj: String,
     #[serde(flatten)]
     pub endereco: EnderecoDto,
+    pub gera_dici: bool,
+    pub gera_nf: bool,
+    pub add_to_asaas: bool,
     pub telefone: String,
     pub login: String,
     pub senha: String,
@@ -23,12 +26,28 @@ pub struct ClienteDto {
     pub contrato_id: Option<Vec<i32>>
 }
 
+pub struct ClienteNf {
+    pub nome: String,
+    pub email: String,
+    pub cpf_cnpj: String,
+    pub gera_nf: bool,
+    pub rua: String,
+    pub numero: Option<String>,
+    pub bairro: String,
+    pub cidade: String,
+    pub estado: String,
+    pub complemento: Option<String>,
+    pub cep: String,
+}
+
 #[derive(Deserialize, Serialize, Debug, FromRow)]
 pub struct Cliente {
     pub id: i32,
     pub tipo: bool,
     pub nome: String,
     pub email: String,
+    //TODO i have to guarantee this is not formated
+    //the cliente can pass an already formatted cpf/cnpj and i would have to strip it off
     pub cpf_cnpj: String,
     pub formatted_cpf_cnpj: String,
     pub cep: String,
@@ -42,10 +61,13 @@ pub struct Cliente {
     pub complemento: Option<String>,
     pub ibge_code: String,
     pub telefone: String,
+    pub gera_dici: bool,
+    pub gera_nf: bool,
+    pub add_to_asaas: bool,
     //TODO convert this on cliente_edit.html
-    pub login: Option<String>,
+    pub login: String,
     //TODO convert this on cliente_edit.html
-    pub senha: Option<String>,
+    pub senha: String,
     pub mikrotik_id: i32,
     pub plano_id: i32,
     // pub contrato_id: Option<Vec<i32>>

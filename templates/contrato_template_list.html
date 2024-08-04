@@ -1,25 +1,28 @@
 {% extends "snippets/base.html" %}
 
+{% block title %}Templates de Contrato{% endblock title %}
+
 {% block content %}
-    <h1>Templates de Contrato</h1>
-    <table class="table">
-        <thead>
-            <tr>
-                <th scope="col">Nome</th>
-                <th scope="col">Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for template in templates %}
-                <tr>
-                    <td>{{ template.nome }}</td>
-                    <td>
-                        <!--TODO redo the <a> tags to use htmx-->
-                        <a hx-put="/contrato/template/{{ template.id }}">Editar</a>
-                        <a hx-delete="/contrato/template/{{ template.id }}" ht-target="closest tr">Deletar</a>
-                    </td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-{% endblock content%}
+<h1 class="text-2xl font-bold mb-4">Templates de Contrato</h1>
+<a href="/financeiro/contrato_template/add" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4 inline-block">Adicionar Template</a>
+<table class="min-w-full bg-white">
+    <thead>
+        <tr>
+            <th class="py-2">Nome</th>
+            <th class="py-2">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for template in templates %}
+        <tr>
+            <td class="border px-4 py-2">{{ template.nome }}</td>
+            <td class="border px-4 py-2">
+                <a href="/contrato/template/{{ template.id }}" hx-get="/contrato/template/{{ template.id }}" hx-target="#response" hx-swap="innerHTML" class="text-blue-500 hover:text-blue-700">Editar</a>
+                <a href="/contrato/template/{{ template.id }}" hx-delete="/contrato/template/{{ template.id }}" hx-target="closest tr" class="text-red-500 hover:text-red-700">Deletar</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<div id="response"></div>
+{% endblock content %}
