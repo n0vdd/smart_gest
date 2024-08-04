@@ -367,7 +367,7 @@ pub async fn create_radius_plano(plano:PlanoRadiusDto) -> Result<(), anyhow::Err
     //TODO adicionar um burst com o dobro da velocidade por 1 minuto
     //adiciona o limite de velocidade ao plano
     query!("INSERT INTO radgroupreply(groupname,attribute,op,value) VALUES ($1,$2,$3,$4)",
-    plano.nome,"Mikrotik-Rate-Limit",":=",format!("{}/{}",plano.velocidade_up,plano.velocidade_down)).execute(&mut pool).await.map_err(|e| {
+    plano.nome,"Mikrotik-Rate-Limit",":=",format!("{}m/{}m",plano.velocidade_up,plano.velocidade_down)).execute(&mut pool).await.map_err(|e| {
         error!("Failed to insert plano into radgroupreply: {:?}", e);
         anyhow!("Failed to insert plano into radgroupreply Mikrotik-Rate-Limit".to_string())
     })?;

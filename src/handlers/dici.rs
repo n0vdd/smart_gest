@@ -5,14 +5,12 @@ use axum::{response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
 use chrono::{Datelike, Local };
 use sqlx::{query, query_as, PgPool};
-use tera::Tera;
 use time::{macros::format_description, Date };
 use tokio::{fs::File, io::AsyncWriteExt};
 use tracing::{error,debug};
 
-use crate::{models::{client::TipoPessoa, dici::{Dici, GenerateDiciForm}}, TEMPLATES};
+use crate::{handlers::clients::fetch_tipo_clientes_before_date_for_dici, models::{client::TipoPessoa, dici::{Dici, GenerateDiciForm}}, TEMPLATES};
 
-use super::clients::fetch_tipo_clientes_before_date;
 
 //TODO get this from the provedor table
 const CNPJ:&str = "48530335000148"; // Hardcoded CNPJ
@@ -75,7 +73,7 @@ pub async fn generate_dici(Extension(pool): Extension<Arc<PgPool>>,Form(form): F
   let reference_date = time::PrimitiveDateTime::parse(&rf, &date_format).expect("Failed to parse reference date");
 
   //Pega clientes criados antes da data de referencia
-  let clients = fetch_tipo_clientes_before_date(&pool,reference_date).await.expect("Falha ao pegar clientes antes da data de referencia");
+  let clients = fetch_tipo_clientes_before_date_for_dici(&pool,reference_date).await.expect("Falha ao pegar clientes antes da data de referencia");
 
   let mut pfs: Vec<TipoPessoa> = Vec::new();
   let mut pjs: Vec<TipoPessoa> = Vec::new();
@@ -174,7 +172,7 @@ pub async fn generate_dici_month_year(pool: &PgPool, month: u32, year: i32) -> R
   debug!("Date struct for comparing with timestamp in db: {:?}", rf);
   let reference_date = time::PrimitiveDateTime::parse(&rf, &date_format).expect("Failed to parse reference date");
 
-  let clients = fetch_tipo_clientes_before_date(pool, reference_date)
+  let clients = fetch_tipo_clientes_before_date_for_dici(pool, reference_date)
       .await
       .context("Falha ao pegar clientes antes da data de referencia")?;
 

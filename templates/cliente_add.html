@@ -56,6 +56,31 @@
             <input type="senha" id="senha" name="senha" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
         </div>
 
+        <!--make value true the default choice-->
+        <div class="mb-4">
+            <label for="gera_nf" class="block text-gray-700 text-sm font-bold mb-2">Gerar Nota Fiscal:</label>
+            <select id="gera_nf" name="gera_nf" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                <option value="true" selected>Sim</option>
+                <option value="false">Não</option>
+            </select>
+        </div>
+
+        <div class="mb-4">
+            <label for="gera_dici" class="block text-gray-700 text-sm font-bold mb-2">Incluir no DICI:</label>
+            <select id="gera_dici" name="gera_dici" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                <option value="true" selected>Sim</option>
+                <option value="false">Não</option>
+            </select>
+        </div>
+
+        <div class="mb-4">
+            <label for="add_to_asaas" class="block text-gray-700 text-sm font-bold mb-2">Adiciona ao Sistema de Pagamento:</label>
+            <select id="add_to_asaas" name="add_to_asaas" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                <option value="true" selected>Sim</option>
+                <option value="false">Não</option>
+            </select>   
+        </div>
+
         <div class="mb-4">
             <label for="mikrotik_id" class="block text-gray-700 text-sm font-bold mb-2">Mikrotik:</label>
             <select id="mikrotik_id" name="mikrotik_id" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">

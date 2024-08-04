@@ -9,7 +9,7 @@ use sqlx::{query, query_as, PgPool};
 use time::macros::format_description;
 use tracing::{debug, error};
 
-use crate::{handlers::planos::find_plano_by_cliente, models::{client::{Cliente, ClienteDto}, plano::{Plano, TipoPagamento}}, services::nfs::gera_nfs};
+use crate::{handlers::planos::find_plano_by_cliente, models::{client::{Cliente, ClienteDto, ClienteNf}, plano::{Plano, TipoPagamento}}, services::nfs::gera_nfs};
 
 
 ///!this is the api key for the sandbox, it should be set on the env for production
@@ -133,7 +133,21 @@ pub async fn webhook_handler(
                   e
                }).expect("Erro ao buscar cliente");
 
-               gera_nfs(&cliente,webhook_data.payment_data.net_value).await.expect("erro ao gerar nota fiscal");
+               let cliente_nf = ClienteNf {
+                  nome: cliente.nome.clone(),
+                  email: cliente.email.clone(),
+                  cpf_cnpj: cliente.cpf_cnpj.clone(),
+                  gera_nf: cliente.gera_nf,
+                  rua: cliente.rua.clone(),
+                  numero: cliente.numero.clone(),
+                  bairro: cliente.bairro.clone(),
+                  cidade: cliente.cidade.clone(),
+                  estado: cliente.estado.clone(),
+                  complemento: cliente.complemento.clone(),
+                  cep: cliente.cep.clone(),
+               };
+
+               gera_nfs(&cliente_nf,webhook_data.payment_data.net_value).await;
 
                if checa_cliente_bloqueado_radius(&cliente.nome).await.map_err(|e| {
                   error!("Failed to check if client is blocked: {:?}", e);
@@ -176,12 +190,10 @@ pub async fn webhook_handler(
                anyhow!("Erro ao buscar cliente no sistema asaas")
             }).expect("Erro ao buscar cliente");
 
-            if let Some(login) = cliente.login {
-               bloqueia_cliente_radius(&login).await.map_err(|e| {
-                  error!("Failed to block client: {:?}", e);
-                  anyhow!("Erro ao bloquear cliente no servidor radius")
-               }).expect("Erro ao bloquear cliente");
-            }
+            bloqueia_cliente_radius(&cliente.login).await.map_err(|e| {
+               error!("Failed to block client: {:?}", e);
+               anyhow!("Erro ao bloquear cliente no servidor radius")
+            }).expect("Erro ao bloquear cliente");
 
          }
          http::StatusCode::OK
@@ -194,12 +206,10 @@ pub async fn webhook_handler(
                anyhow!("Erro ao buscar cliente no sistema asaas")
             }).expect("Erro ao buscar cliente");
 
-            if let Some(login) = cliente.login {
-               bloqueia_cliente_radius(&login).await.map_err(|e| {
-                  error!("Failed to block client: {:?}", e);
-                  anyhow!("Erro ao bloquear cliente no servidor radius")
-               }).expect("Erro ao bloquear cliente");
-            }
+            bloqueia_cliente_radius(&cliente.login).await.map_err(|e| {
+               error!("Failed to block client: {:?}", e);
+               anyhow!("Erro ao bloquear cliente no servidor radius")
+            }).expect("Erro ao bloquear cliente");
          }
          http::StatusCode::OK
       },
@@ -251,6 +261,10 @@ struct ClientePost{
 }
 
 pub async fn add_cliente_to_asaas(cliente:&ClienteDto,plano:&Plano) -> Result<(), anyhow::Error> {
+   if cliente.add_to_asaas == false {
+      return Ok(());
+   }
+
    let client = reqwest::Client::new();
    
    let url = format!("https://sandbox.asaas.com/api/v3/customers/");
@@ -273,6 +287,7 @@ pub async fn add_cliente_to_asaas(cliente:&ClienteDto,plano:&Plano) -> Result<()
          error!("Failed to parse clients: {:?}", e);
          anyhow::anyhow!("Erro ao realizar parse dos clientes")
       })?
+
       //Checa se o nome do cliente ja esta no sistema do asaas 
       .data.iter().find(|cl| cl.name == cliente.nome).map(|name| {
          debug!("Cliente ja existe: {:?}",name);

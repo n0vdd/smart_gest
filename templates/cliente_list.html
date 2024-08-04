@@ -28,6 +28,7 @@
                     <a href="/cliente/{{ client.id }}" hx-get="/cliente/{{ client.id }}" hx-target="#response" hx-swap="innerHTML" class="text-blue-500 hover:text-blue-700">Edit</a>
                     <a href="/cliente/{{ client.id }}" hx-delete="/cliente/{{ client.id }}" hx-target="#response" hx-swap="innerHTML" class="text-red-500 hover:text-red-700">Delete</a>
                     <a href="/cliente/contrato/{{ client.id }}" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Generate Contract</a>
+                    <a href="/cliente/block/{{ client.id }}" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Block</a>
                 </td>
             </tr>
             {% endfor %}

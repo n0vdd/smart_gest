@@ -19,14 +19,13 @@ const DESCRICAO: &str = "Serviço de internet";
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context;
-use chrono::Datelike;
-use fantoccini::{Client, ClientBuilder, Locator};
-use serde_json::json;
-use sqlx::{query, PgPool};
-use tokio::{fs::read_dir, time::sleep};
-use tracing::{debug, error, info};
+use chrono::{Datelike,Local};
+use std::{path::PathBuf, time::SystemTime};
 
-use crate::models::client::Cliente;
+use fantoccini::{Client, ClientBuilder, Locator};
+use tracing::{debug, error};
+
+use crate::models::client::{Cliente, ClienteNf};
 
 
 //TODO cancela nota fiscal
@@ -118,77 +117,19 @@ pub async fn exporta_nfs(pool: &PgPool) -> Result<(),anyhow::Error> {
     .click()
     .await.context("failed to click first day")?;
 
-    //Open second calendar
-    client.find(Locator::Id("vDATAFIM_dp_trigger")).await.context("failed to find end date trigger element")?
-    .click()
-    .await.context("failed to click end date trigger")?;
+    //TODO navegar para https://e-nfs.com.br/e-nfs_novalima/servlet/hwmcontabilidade
 
-    //BUG working with the second calender there is a need to specify the div.calendar:last-of-type
-    //wait for the second calendar to open
-    client.wait().for_element(Locator::Css("div.calendar:last-of-type td.calendarbutton.calendar-nav:nth-of-type(2)")).await.context("failed to find previous month button")?;
+    //seleciona as datas no calendario de js
 
-    // Navigate to the previous month 
-    client.find(Locator::Css("div.calendar:last-of-type td.calendarbutton.calendar-nav:nth-of-type(2)"))
-    .await.context("failed to find previous month button")?
-    .click()
-    .await.context("failed to click previous month button")?;
+    //clica em BUTTON1
 
-    //wait for the previous month to load
-    client.wait().for_element(Locator::Css("div.calendar:last-of-type td.day")).await.context("failed to wait for find current day element")?;
+    //clica em vDOWNLOAD_0001
 
-    //BUG when i did div.calendar:last-of-type td.day:last-of-type it would not work
-    //so we get all the td.days and go to the last one
-    let days = client.find_all(Locator::Css("div.calendar:last-of-type td.day")).await.context("failed to find day elements")?;
-    let last_day = days.last().context("failed to find last day element")?;
-    last_day.click().await.context("failed to click last day")?;
-
-    // Click the BUTTON1 to submit the form
-    client.find(Locator::Id("BUTTON1")).await.context("failed to find submit button")?
-    .click()
-    .await.context("failed to click submit button")?;
-
-    //esperar a listagem de notas fiscais aparecer
-    client.wait().for_element(Locator::Id("vPROCESSAR_0001")).await.context("failed to find processar button")?;
-
-    //processar as notas fiscais do mes,necessario para o download
-    client.find(Locator::Id("vPROCESSAR_0001")).await.context("failed to find processar button")?
-    .click()
-    .await.context("failed to click processar button")?;
-
-    sleep(Duration::from_secs(30)).await;
-
-    //Esperar o download estar disponivel
-    client.wait().for_element(Locator::Id("vDOWNLOAD_0001")).await.context("failed to find download button")?;
-
-    //Realiza o download
-    client.find(Locator::Id("vDOWNLOAD_0001")).await.context("failed to find download link")?
-    .click()
-    .await.context("failed to click download link")?;
-
-    sleep(Duration::from_secs(5)).await;
-
-    let month = chrono::Local::now().date_naive().month();
-    let year = chrono::Local::now().year();
-    
-    //TODO get the path for the last downloaded file in nota_fical/export_lotes
-    //TODO save the path to the database
-    let mut dir = read_dir("nota_fiscal/export_lotes").await.context("Erro ao ler o diretorio de exportacao de notas fiscais")?;
-    let mut last_modified:Option<SystemTime> = None;
-    while let Some(path) = dir.next_entry().await?  {
-        //BUG this will error
-        if path.metadata().await?.modified()? < last_modified.unwrap() {
-            continue;
-        } else {
-            last_modified = Some(path.metadata().await?.modified()?);
-        }
-        
-    }
-
-
-    Ok(())
 }
 
-pub async fn gera_nfs(cliente:&Cliente,value:f32) -> Result<(),anyhow::Error> {
+//TODO gera nota fiscal para os clientes que tiverem o pagamento confirmado
+//TODO pegar os valores para o scraper usando f12
+pub async fn gera_nfs(cliente:&Cliente,value:f32) {
 
     let client = ClientBuilder::native().connect("http://localhost:9515").await.map_err(|e| {
         error!("failed to connect to WebDriver: {:?}", e);
@@ -211,11 +152,62 @@ pub async fn gera_nfs(cliente:&Cliente,value:f32) -> Result<(),anyhow::Error> {
 
     input_cliente(&client, cliente.cpf_cnpj.as_str()).await.context("Erro ao colocar cpf/cnpj do cliente")?;
 
-    dados_nfs(&cliente, &client, value).await.context("Erro ao colocar dados da nota fiscal: endereco,valor servico,etc...")?;
+    dados_nfs(&cliente, &client, value).await;
 
     //TODO salvar a mesma para o sistema de arquivos
     //caminho: notas_fiscais/{cliente_nome}/{data}.pdf
     //e salvar um o pagamento relacionado,o caminho e a data no banco de dados
+    Ok(())
+}
+
+//the chromedriver will save to nota_fiscal/{cliente_nome} already
+//will need to get the last modified file and rename it to the date
+async fn salvar_nota_fiscal(client:&Client,nome:&str) -> Result<(),anyhow::Error> {
+    //BUG maybe this doesnt match id
+    client.wait().for_element(Locator::Css("#BUTTON2.btnimprimir")).await.context("failed to find imprimir button")?;
+
+    client.find(Locator::Css("#BUTTON2.btnimprimir")).await.context("failed to find imprimir button")?
+    .click()
+    .await.context("failed to click imprimir button")?;
+
+    //maybe this will already save the pdf, if not will need to click on the save button
+    client.wait().for_element(Locator::Css("cr-button.action-button")).await.context("failed to find salvar button")?;
+
+    client.find(Locator::Css("cr-button.action-button")).await.context("failed to find salvar button")?
+    .click()
+    .await.context("failed to click salvar button")?;
+
+    //caminho: notas_fiscais/{cliente_nome}/{data}.pdf
+    //e salvar um o pagamento relacionado,o caminho e a data no banco de dados
+    let path = format!("nota_fiscal/{}/",nome);
+    let mut dir = read_dir(&path).await.context("failed to read dir")?;
+    // Variables to track the last modified file
+    let mut last_modified_file: Option<(PathBuf, SystemTime)> = None;
+
+    while let Some(entry) = dir.next_entry().await.context("Failed to get next entry")? {
+        let metadata = entry.metadata().await.context("Failed to get metadata")?;
+        let modified_time = metadata.modified().context("Failed to get modified time")?;
+
+        match last_modified_file {
+            Some((_, last_modified_time)) => {
+                if modified_time > last_modified_time {
+                    last_modified_file = Some((entry.path().clone(), modified_time));
+                }
+            }
+            None => {
+                last_modified_file = Some((entry.path().clone(), modified_time));
+            }
+        }
+        // Rename the last modified file to include the current date
+        if let Some((last_file_path, _)) = last_modified_file.clone() {
+            let current_date = Local::now().format("%d-%m-%Y").to_string();
+            let new_file_name = format!("{}/{}.pdf", path, current_date);
+            rename(&last_file_path, &new_file_name).await.context("Failed to rename file")?;
+        } else {
+            warn!("No files found in the directory.");
+        }
+    }
+
     Ok(())
 }
 
@@ -257,19 +249,27 @@ async fn input_cliente(client: &Client,cpf_cnpj: &str) -> Result<(),anyhow::Erro
     Ok(())
 }
 
-async fn dados_nfs(cliente:&Cliente,client: &Client,value:f32) -> Result<(),anyhow::Error> {
-    // Locate and set "Razão Social" if empty
-    client.wait().for_element(Locator::Css("#vCTBRAZSOC")).await.context("failed to find Razão Social input element")?;
-    let razao_social_element = client.find(Locator::Css("#vCTBRAZSOC")).await.context("failed to find Razão Social input element")?;
-    let current_value = razao_social_element.prop("value").await.context("failed to get value of Razão Social input element")?;
-    if current_value.is_none() {
-        razao_social_element.send_keys(&cliente.nome).await.context("failed to input Razão Social value")?;
-    }
+async fn dados_nfs(cliente:&Cliente,client: &Client,value:f32) {
+    client.wait().for_element(Locator::Css("#vCTBRAZSOC")).await.map_err(|e| {
+        error!("failed to find Razão Social input element: {:?}", e);
+        e
+    }).expect("failed to find Razão Social input element");
+    // Locate the "Razão Social" input element by its ID
+    let razao_social_element = client.find(Locator::Css("#vCTBRAZSOC"))
+    .await.map_err(|e| {
+        error!("failed to find Razão Social input element: {:?}", e);
+        e
+    })
+    .expect("failed to find Razão Social input element");
 
-    // Locate and set "Nome Logradouro"
-    //client.wait().for_element(Locator::Css("#vNOMLOG")).await.context("failed to find nome logradouro input element")?;
-    let nome_logradouro_element = client.find(Locator::Css("#vNOMLOG")).await.context("failed to find nome logradouro input element")?;
-    let current_value = nome_logradouro_element.prop("value").await.context("failed to get value of nome logradouro input element")?;
+    // Caso nao se tenha a razao social
+    let current_value = razao_social_element.prop("value")
+    .await.map_err(|e| {
+        error!("failed to get value of Razão Social input element: {:?}", e);
+        e
+    }).expect("failed to get value of Razão Social input element");
+
+    //Seta com o nome do cliente
     if current_value.is_none() {
         nome_logradouro_element.send_keys(&cliente.rua).await.context("failed to input value in nome logradouro")?;
     }

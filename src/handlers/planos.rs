@@ -7,7 +7,7 @@ use sqlx::{ query, query_as, PgPool};
 use tera::Tera;
 use tracing::error;
 
-use crate::{models::{contrato::ContratoTemplate, plano::{Plano, PlanoDto}}, TEMPLATES};
+use crate::{models::{contrato::ContratoTemplate, plano::{Plano, PlanoDto, TipoPagamento}}, TEMPLATES};
 
 
 
@@ -154,6 +154,8 @@ pub async fn show_planos_form(Extension(pool): Extension<Arc<PgPool>>) -> Html<S
 
     let mut context = tera::Context::new();
     context.insert("contratos", &contratos);
+    let pagamentos = vec![TipoPagamento::Boleto,TipoPagamento::CartaoCredito,TipoPagamento::Pix]; 
+    context.insert("tipo_pagamento", &pagamentos);
 
     let template = TEMPLATES.render("plano_add.html", &context).map_err(|e| -> _ {
         error!("Failed to render plano add template: {:?}", e);
@@ -172,13 +174,15 @@ pub async fn register_plano(
     Form(plano): Form<PlanoDto>,
 ) -> impl IntoResponse {
     query!(
-        "INSERT INTO planos (nome, valor, velocidade_up,velocidade_down, descricao, contrato_template_id)
-        VALUES ($1, $2, $3, $4, $5, $6)",
+        "INSERT INTO planos (nome, valor, velocidade_up,velocidade_down, descricao,tipo_pagamento, contrato_template_id)
+        VALUES ($1, $2, $3, $4, $5, $6,$7)",
         plano.nome,
         plano.valor,
         plano.velocidade_up,
         plano.velocidade_down,
         plano.descricao,
+        //easier to save as string than to implemente decode/encode
+        plano.tipo_pagamento.to_string(),
         //plano.tecnologia,
         plano.contrato_template_id) 
     .execute(&*pool)

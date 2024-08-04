@@ -13,14 +13,17 @@ use axum::{Router, routing::get, routing::post, extract::Extension};
 use chrono::{Datelike, Duration, Utc};
 use cron::Schedule;
 use db::create_postgres_pool;
-use handlers::clients::{bloqueia_clientes_atrasados, delete_cliente,  register_cliente, show_cliente_form, show_cliente_list, update_cliente};
-use handlers::contrato::generate_contrato;
+use handlers::clients::{bloqueia_cliente_no_radius, bloqueia_clientes_atrasados, delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
+use handlers::contrato::{add_contrato_template, generate_contrato, show_contrato_template_add_form, show_contrato_template_edit_form, show_contrato_template_list};
 use handlers::dici::{generate_dici, generate_dici_month_year, show_dici_list};
 use handlers::mikrotik::{delete_mikrotik, failover_mikrotik_script, failover_radius_script, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
+use models::client::{Cliente, ClienteNf, TipoPessoa};
+use models::plano::TipoPagamento;
 use once_cell::sync::Lazy;
-use radius::{create_radius_cliente_pool, create_radius_plano_bloqueado};
+use radius::{bloqueia_cliente_radius, create_radius_cliente_pool, create_radius_plano_bloqueado};
+use services::nfs::gera_nfs;
 use services::nfs::exporta_nfs;
 use services::voip::checa_voip_down;
 use services::webhooks::webhook_handler;
@@ -181,12 +184,6 @@ async fn scheduler(pool: Arc<PgPool> ) -> Result<(), anyhow::Error> {
 async fn main() {
     dotenv::dotenv().ok();
     tracing_subscriber::fmt::init();
-    //Inicia o chromedriver para ser usado pelos processos de automacao
-    //nota fiscal
-    Command::new("chromedriver").spawn().map_err(|e| {
-        error!("Failed to start chromedriver: {:?}", e);
-        panic!("Failed to start chromedriver")
-    }).expect("Failed to start chromedriver");
 
     //Setup db
     let pg_pool = Arc::new(create_postgres_pool().await
@@ -229,6 +226,7 @@ async fn main() {
         .route("/cep", get(lookup_cep))
         .route("/telefone", get(validate_phone))
         .route("/cpf_cnpj", get(validate_cpf_cnpj))
+        .route("/block/:cliente_id", get(bloqueia_cliente_no_radius))
         .route("/endereco",get(show_endereco));
 
     let mikrotik_routes = Router::new()
@@ -260,6 +258,10 @@ async fn main() {
                 .layer(axum::middleware::from_fn(check_access_token))
         )
         .route("/generate_dici",post(generate_dici))
+        .route("/contrato_template", get(show_contrato_template_list))
+        .route("/contrato_template", post(add_contrato_template))
+        .route("/contrato_template/add", get(show_contrato_template_add_form))
+        .route("/contrato_template/:id",get(show_contrato_template_edit_form))
         .route("/dici", get(show_dici_list));
 
     let app = Router::new()
