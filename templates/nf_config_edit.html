@@ -1,17 +1,55 @@
 {% extends "snippets/base.html" %}
 {% block content %}
-<div class="container mx-auto p-4">
-    <h1 class="text-2xl font-bold mb-4">Add NF Config</h1>
-    <form method="put" action="/config/nf" class="space-y-4">
-        <div class="flex items-center">
-            <label for="contabilidade_email" class="w-1/4 text-right mr-4">Contabilidade Email</label>
-            <input type="email" value="{{ email }}" class="w-3/4 p-2 border border-gray-300 rounded" id="contabilidade_email" name="contabilidade_email" placeholder="Contabilidade Email">
+<div id="replace" class="container mx-auto p-4">
+    <h1 class="text-2xl font-bold mb-4">Edit NF Config</h1>
+    <form hx-put="/config/nf" hx-swap="none" class="space-y-4">
+        <input type="hidden" name="id" value="{{ id }}">
+        <div id="email-container" class="space-y-4">
+            {% for email in contabilidade_email %}
+                <div class="flex items-center email-row">
+                    <label for="contabilidade_email_{{ loop.index0 }}" class="w-1/4 text-right mr-4">Contabilidade Email</label>
+                    <input type="email" class="w-3/4 p-2 border border-gray-300 rounded" id="contabilidade_email_{{ loop.index0 }}" name="contabilidade_email[]" value="{{ email }}" placeholder="Contabilidade Email">
+                    <button type="button" class="ml-2 bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded delete-email-btn">Delete</button>
+                </div>
+            {% endfor %}
         </div>
-        <div class="flex justify-end">
+        <div class="flex justify-between">
+            <button type="button" id="add-email-btn" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+                Add Another Email
+            </button>
             <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                Add NF Config
+                Save NF Config
             </button>
         </div>
     </form>
 </div>
+
+<script>
+    document.getElementById('add-email-btn').addEventListener('click', function() {
+        const emailContainer = document.getElementById('email-container');
+        const emailCount = emailContainer.children.length;
+        const newEmailDiv = document.createElement('div');
+        newEmailDiv.className = 'flex items-center email-row';
+        newEmailDiv.innerHTML = `
+            <label for="contabilidade_email_${emailCount}" class="w-1/4 text-right mr-4">Contabilidade Email</label>
+            <input type="email" class="w-3/4 p-2 border border-gray-300 rounded" id="contabilidade_email_${emailCount}" name="contabilidade_email[]" placeholder="Contabilidade Email">
+            <button type="button" class="ml-2 bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded delete-email-btn">Delete</button>
+        `;
+        emailContainer.appendChild(newEmailDiv);
+        addDeleteFunctionality();
+    });
+
+    function addDeleteFunctionality() {
+        const deleteButtons = document.querySelectorAll('.delete-email-btn');
+        deleteButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                this.closest('.email-row').remove();
+            });
+        });
+    }
+
+    // Initialize delete functionality for existing buttons
+    addDeleteFunctionality();
+</script>
 {% endblock content %}
+

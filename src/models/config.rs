@@ -24,7 +24,8 @@ pub struct Provedor {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NfConfig {
     pub id: i32,
-    pub contabilidade_email: String,
+    #[serde(rename = "contabilidade_email[]")]
+    pub contabilidade_email: Vec<String>,
     pub created_at: Option<PrimitiveDateTime>,
     pub updated_at: Option<PrimitiveDateTime>
 }
@@ -64,5 +65,6 @@ pub struct EmailConfigDto {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NfConfigDto {
-    pub contabilidade_email: String
+    #[serde(rename = "contabilidade_email[]")]
+    pub contabilidade_email: Vec<String>,
 }

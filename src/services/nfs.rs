@@ -22,6 +22,7 @@ use anyhow::Context;
 use chrono::{Datelike,Local};
 use lettre::{message::MessageBuilder, AsyncSmtpTransport, AsyncTransport, Message, SmtpTransport, Tokio1Executor, Transport};
 use lettre_email::Mailbox;
+use serde_json::json;
 use sqlx::{query, PgPool};
 use tokio::{fs::{read_dir, rename}, time::sleep};
 use std::path::PathBuf;
@@ -31,16 +32,106 @@ use tracing::{debug, error, warn};
 
 use crate::{models::client::{Cliente, ClienteNf}, services::email::send_nf, TEMPLATES};
 
+use super::email::send_nf_lote;
+
+//TODO download the nf emitida e nao enviada
+//irei testar tanto o envio de email para o cliente
+// quanto o processo de fazer download do arquivo pelo botao imprimir
+pub async fn download_nf_nao_enviada() -> Result<(),anyhow::Error> {
+    let mut caps = serde_json::Map::new();
+    let mut chrome_options = serde_json::Map::new();
+    //This saves the pdf to the default download dir
+    //just need to set the download dir and it should work, then i send the email
+    //TODO complete this when i get home
+    chrome_options.insert("args".to_string(), json!(["--kiosk-printing"]));
+    caps.insert("goog:chromeOptions".to_string(), json!(chrome_options));
+
+    let client = ClientBuilder::native()
+        .capabilities(caps)
+        .connect("http://localhost:9515")
+        .await
+        .context("Erro ao conectar ao WebDriver")?;
+
+    //TODO login to the system
+    login(&client).await.context("Erro ao logar no sistema de nota fiscal")?;
+
+    //wait for the login to complete
+    //BUG if i do the next step too fast it will fail,so its better to wait until the page after login loads
+    client.wait().for_element(Locator::Id("span_vVSAIDA")).await.context("Erro ao esperar pelo elemento de texto")?;
+
+    client.find(Locator::Id("span_vVSAIDA")).await.context("Erro ao encontrar o elemento de texto")?
+    .click()
+    .await.context("Erro ao clicar no elemento notas emitidas")?;
+
+    client.wait().for_element(Locator::Id("vVISUALIZAR_0001")).await.context("Erro ao esperar pelo elemento para visualizar nota emitida")?;
+
+    client.find(Locator::Id("vVISUALIZAR_0001")).await.context("Erro ao encontrar o elemento para visualizar nota emitida")?
+    .click()
+    .await.context("Erro ao clicar no elemento para visualizar nota emitida")?;
+
+    //BUG maybe this doesnt match id
+    client.wait().for_element(Locator::Css("#BUTTON2.btnimprimir")).await.context("failed to find imprimir button")?;
+
+    client.find(Locator::Css("#BUTTON2.btnimprimir")).await.context("failed to find imprimir button")?
+    .click()
+    .await.context("failed to click imprimir button")?;
+
+    //maybe this will already save the pdf, if not will need to click on the save button
+    client.wait().for_element(Locator::Id("content")).await.context("failed to find salvar button")?;
+
+    client.find(Locator::Id("content")).await.context("failed to find salvar button")?
+    .click()
+    .await.context("failed to click salvar button")?;
+
+    /* 
+    //caminho: notas_fiscais/{cliente_nome}/{data}.pdf
+    //e salvar um o pagamento relacionado,o caminho e a data no banco de dados
+    let path = "nota_fiscal/teste";
+    let mut dir = read_dir(&path).await.context("failed to read dir")?;
+    // Variables to track the last modified file
+    let mut last_modified_file: Option<(PathBuf, SystemTime)> = None;
+
+    while let Some(entry) = dir.next_entry().await.context("Failed to get next entry")? {
+        let metadata = entry.metadata().await.context("Failed to get metadata")?;
+        let modified_time = metadata.modified().context("Failed to get modified time")?;
+
+        match last_modified_file {
+            Some((_, last_modified_time)) => {
+                if modified_time > last_modified_time {
+                    last_modified_file = Some((entry.path().clone(), modified_time));
+                }
+            }
+            None => {
+                last_modified_file = Some((entry.path().clone(), modified_time));
+            }
+        }
+
+        // Rename the last modified file to include the current date
+        if let Some((last_file_path, _)) = last_modified_file.clone() {
+            let current_date = Local::now().format("%d-%m-%Y").to_string();
+            let new_file_name = format!("{}/{}.pdf", path, current_date);
+            rename(&last_file_path, &new_file_name).await.context("Failed to rename file")?;
+        } else {
+            warn!("No files found in the directory.");
+        }
+    }
+*/
+
+    //TODO navigate to the page with the nf emitida e nao enviada
+
+    //TODO visualize it(the same page after you emit it
+
+    //TODO find the imprimit button and complete the download flow
+
+    //TODO send it to the cliente
+
+    Ok(())
+}
+
 
 //TODO cancela nota fiscal
 pub async fn cancela_nfs() -> Result<(),anyhow::Error> {
-    let client = ClientBuilder::native().connect("http://localhost:9515").await.map_err(|e| {
-        error!("failed to connect to WebDriver: {:?}", e);
-        e
-    }).expect("failed to connect to WebDriver");
-    //TODO login no sistema da prefeitura de nova lima
-    login(&client).await.context("erro ao logar no sistema de nota fiscal")?;
-
+ 
 
     //TODO navegar para essa url: https://e-nfs.com.br/e-nfs_novalima/servlet/hwconsultaprocessocontrib
 
@@ -80,7 +171,7 @@ fn setup_chromedriver() -> serde_json::Map<String, serde_json::Value> {
     caps
 }
 
-pub async fn exporta_nfs(pool: &PgPool) -> Result<(),anyhow::Error> {
+pub async fn exporta_nfs(pool: &PgPool,mailer:&AsyncSmtpTransport<Tokio1Executor> ) -> Result<(),anyhow::Error> {
     let caps = setup_chromedriver();
 
     let client = ClientBuilder::native()
@@ -192,7 +283,7 @@ pub async fn exporta_nfs(pool: &PgPool) -> Result<(),anyhow::Error> {
     }
 
     // Check if we found a file and save the path to the database
-    if let Some((last_file_path, _)) = last_modified_file {
+    if let Some((last_file_path, _)) = last_modified_file.clone() {
         let last_file_path_str = last_file_path.to_str().context("Failed to convert path to string")?.to_string();
         query!("INSERT INTO nf_lote (path, month, year) VALUES ($1, $2, $3)", last_file_path_str, month as i32, year)
             .execute(pool)
@@ -202,6 +293,10 @@ pub async fn exporta_nfs(pool: &PgPool) -> Result<(),anyhow::Error> {
         println!("No files found in the directory.");
     }
 
+    //Envia o lote de nota fiscal para a contabilidade
+    //TODO pegar a quantidade de notas fiscais do lote
+    send_nf_lote(pool, mailer, last_modified_file.unwrap().0,0)
+    .await.context("Erro ao enviar email com lote de nota fiscal")?;
     Ok(())
 }
 
@@ -235,13 +330,8 @@ pub async fn gera_nfs(pool:&PgPool,cliente:&ClienteNf,value:f32,mailer: Option<A
     let nf = salvar_nota_fiscal(&client, &cliente.nome).await.context("Erro ao salvar nota fiscal")?;
 
     if let Some(mailer) = mailer {
-        //TODO enviar a nota fiscal por email
-        //envia para o email do cliente
-        //pelo email setado em EmailConfig(o email usado para logar no Smtp)
-        //TODO setar que a nf foi enviada,sera feito depois disso se nao der erro
-
-        //TODO
-        send_nf(&pool, &mailer, &cliente.email, nf, &cliente.nome, value).await.context("Erro ao enviar email com nota fiscal")?;
+        send_nf(&pool, &mailer, &cliente.email, nf, &cliente.nome, value)
+        .await.context("Erro ao enviar email com nota fiscal")?;
     }
     //e salvar um o pagamento relacionado,o caminho e a data no banco de dados
     Ok(())

@@ -1,7 +1,7 @@
 -- Add migration script here
 create TABLE nf_config (
     id SERIAL PRIMARY KEY,
-    contabilidade_email TEXT NOT NULL,
+    contabilidade_email TEXT[] NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

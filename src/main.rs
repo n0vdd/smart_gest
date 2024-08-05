@@ -21,10 +21,11 @@ use handlers::mikrotik::{delete_mikrotik, failover_mikrotik_script, failover_rad
 use handlers::nfs::show_export_lotes_list;
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
-use lettre::{AsyncSmtpTransport, SmtpTransport, Tokio1Executor};
+use lettre::{AsyncSmtpTransport, Tokio1Executor};
 use once_cell::sync::Lazy;
 use radius::{create_radius_cliente_pool, create_radius_plano_bloqueado};
-use services::nfs::exporta_nfs;
+use services::email::setup_email;
+use services::nfs::{download_nf_nao_enviada, exporta_nfs};
 use services::voip::checa_voip_down;
 use services::webhooks::webhook_handler;
 use sqlx::PgPool;
@@ -123,7 +124,7 @@ async fn check_access_token(req: Request,next: Next) -> Result<impl IntoResponse
 //will also generate dici for the previous month and send a notification to a telegram channel
 //on day 12 will check what clientes have not payd and block them
 //when we receive the payment we will unblock the cliente, so there is no need to check again
-async fn scheduler(pool: Arc<PgPool> ) -> Result<(), anyhow::Error> {
+async fn scheduler(pool: Arc<PgPool> ,state:AppState) -> Result<(), anyhow::Error> {
     let expression = "0 0 0 1,12 * *"; // Run at midnight on the 1st and 12th of every month
     let schedule = Schedule::from_str(expression).expect("Invalid cron expression for scheduler");
 
@@ -166,7 +167,7 @@ async fn scheduler(pool: Arc<PgPool> ) -> Result<(), anyhow::Error> {
                 }).expect("Erro ao gerar dici");
 
                 //Esta salvando para downloads, preciso especificar o local dos downloads
-                exporta_nfs(&pool).await.context("Erro ao exportar NFS")?;
+                exporta_nfs(&pool,&state.mailer.clone().unwrap()).await.context("Erro ao exportar NFS")?;
             }
             12 => {
                 bloqueia_clientes_atrasados(&pool).await.map_err(|e| {
@@ -190,9 +191,6 @@ async fn main() {
     dotenv::dotenv().ok();
     tracing_subscriber::fmt::init();
 
-    //TODO start emailer if there is a email config complete already
-    let state = AppState { mailer: None };
-
     Command::new("chromedriver").spawn().map_err(|e| {
         error!("Failed to start chromedriver: {:?}", e);
         panic!("Failed to start chromedriver")
@@ -207,6 +205,14 @@ async fn main() {
 
     info!("postgres pool:{:?} criado",pg_pool);
 
+    let mailer = setup_email(&pg_pool).await.ok();
+    //TODO start emailer if there is a email config complete already
+    let state = AppState { mailer };
+
+    download_nf_nao_enviada().await.map_err(|e| {
+        error!("Failed to download NFS: {:?}", e);
+        panic!("Failed to download NFS")
+    }).expect("Failed to download NFS");
     /* 
     let mysql_pool = Arc::new(radius::create_mysql_pool().await
     .map_err(|e| -> _ {
@@ -215,7 +221,6 @@ async fn main() {
     }).expect("erro ao criar pool"));
     info!("mysql pool:{:?} criado",mysql_pool);
     */
-
 
     create_radius_cliente_pool().await.map_err(|e| {
         error!("Failed to create radius cliente pool: {:?}", e);
@@ -228,7 +233,8 @@ async fn main() {
     }).expect("Failed to create radius plano bloqueado");
 
     //BUG this is running all the time 
-    tokio::spawn(scheduler(pg_pool.clone()));
+    //BUG if the mailer is changed this will not be updated?
+    tokio::spawn(scheduler(pg_pool.clone(),state.clone()));
 
     let clientes_routes = Router::new()
         .route("/",get(show_cliente_list))
@@ -237,11 +243,7 @@ async fn main() {
         .route("/:id", put(update_cliente))
         .route("/:id", delete(delete_cliente))
         .route("/contrato/:cliente_id", get(generate_contrato))
-        //.route("/cep", get(lookup_cep))
-        //.route("/telefone", get(validate_phone))
-        //.route("/cpf_cnpj", get(validate_cpf_cnpj))
         .route("/block/:cliente_id", get(bloqueia_cliente_no_radius));
-        //.route("/endereco",get(show_endereco));
 
     let mikrotik_routes = Router::new()
         .route("/", get(show_mikrotik_list))

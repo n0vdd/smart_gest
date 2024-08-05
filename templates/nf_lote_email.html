@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Envio de Lote de Notas Fiscais</title>
+</head>
+<body>
+    <p>Prezado(s),</p>
+
+    <p>Segue em anexo o lote de notas fiscais referentes aos serviços prestados pela {{ nome }} no mês de {{ mes }}/{{ ano }}.</p>
+
+    <p><strong>Dados do Lote:</strong></p>
+    <ul>
+        <li><strong>Quantidade de Notas Fiscais:</strong> {{ quantidade_notas }}</li>
+        <li><strong>Período:</strong> {{ periodo }}</li>
+    </ul>
+
+    <p>Caso haja qualquer dúvida ou necessidade de informações adicionais, estamos à disposição para auxiliar.</p>
+
+    <p>Agradecemos a colaboração e permanecemos à disposição para qualquer esclarecimento.</p>
+
+    <p>Atenciosamente,</p>
+    {{ nome }}
+</body>
+</html>

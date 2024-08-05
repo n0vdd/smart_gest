@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use axum::{extract::State, response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
+use reqwest::StatusCode;
+use serde_json::json;
 use sqlx::{query, query_as, PgPool};
+use tracing::{error, info};
 
 use crate::{models::config::{EmailConfig, EmailConfigDto, NfConfig, NfConfigDto, Provedor, ProvedorDto}, services::email::setup_email, AppState, TEMPLATES};
 
@@ -56,8 +59,10 @@ pub async fn show_nf_config(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
 
         Html(template)
     } else {
+        let nf = nf_config.unwrap();
         let mut context = tera::Context::new();
-        context.insert("email",& nf_config.unwrap().contabilidade_email);
+        context.insert("id", &nf.id);
+        context.insert("contabilidade_email",& nf.contabilidade_email);
 
         let template = TEMPLATES.render("nf_config_edit.html", &context)
             .expect("Erro ao renderizar template para editar config de nota fiscal");
@@ -68,8 +73,14 @@ pub async fn show_nf_config(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
 
 pub async fn save_nf_config(Extension(pool):Extension<Arc<PgPool>>,Form(nf_config):Form<NfConfigDto>) 
     -> impl IntoResponse {
-    query!("INSERT INTO nf_config (contabilidade_email) VALUES ($1)",nf_config.contabilidade_email)
-        .execute(&*pool).await
+
+    //BUG check what this will do
+    query!("INSERT INTO nf_config (contabilidade_email) VALUES ($1)",&nf_config.contabilidade_email)
+        .fetch_one(&*pool).await
+        .map_err(|e| {
+            error!("Failed to insert nf_config: {:?}",e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })
         .expect("Failed to insert nf_config");
 
     Redirect::to("/config/nf")
@@ -78,8 +89,13 @@ pub async fn save_nf_config(Extension(pool):Extension<Arc<PgPool>>,Form(nf_confi
 //TODO use htmx to send put and update nf_config
 pub async fn update_nf_config(Extension(pool):Extension<Arc<PgPool>>,Form(nf_config):Form<NfConfig>)
     -> impl IntoResponse {
-    query!("UPDATE nf_config SET contabilidade_email = $1 WHERE id = $2",nf_config.contabilidade_email,nf_config.id)
-        .execute(&*pool).await
+
+    query!("UPDATE nf_config SET contabilidade_email = $1 WHERE id = $2 RETURNING *",&nf_config.contabilidade_email,nf_config.id)
+        .fetch_one(&*pool).await
+        .map_err(|e| {
+            error!("Failed to update nf_config: {:?}",e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })
         .expect("Failed to update nf_config");
 
     Redirect::to("/config/nf")
