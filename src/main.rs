@@ -184,11 +184,13 @@ async fn scheduler(pool: Arc<PgPool> ) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
     tracing_subscriber::fmt::init();
 
+    //TODO start emailer if there is a email config complete already
     let state = AppState { mailer: None };
 
     Command::new("chromedriver").spawn().map_err(|e| {
@@ -214,6 +216,7 @@ async fn main() {
     info!("mysql pool:{:?} criado",mysql_pool);
     */
 
+
     create_radius_cliente_pool().await.map_err(|e| {
         error!("Failed to create radius cliente pool: {:?}", e);
         panic!("Failed to create radius cliente pool")
@@ -234,11 +237,11 @@ async fn main() {
         .route("/:id", put(update_cliente))
         .route("/:id", delete(delete_cliente))
         .route("/contrato/:cliente_id", get(generate_contrato))
-        .route("/cep", get(lookup_cep))
-        .route("/telefone", get(validate_phone))
-        .route("/cpf_cnpj", get(validate_cpf_cnpj))
-        .route("/block/:cliente_id", get(bloqueia_cliente_no_radius))
-        .route("/endereco",get(show_endereco));
+        //.route("/cep", get(lookup_cep))
+        //.route("/telefone", get(validate_phone))
+        //.route("/cpf_cnpj", get(validate_cpf_cnpj))
+        .route("/block/:cliente_id", get(bloqueia_cliente_no_radius));
+        //.route("/endereco",get(show_endereco));
 
     let mikrotik_routes = Router::new()
         .route("/", get(show_mikrotik_list))
@@ -287,12 +290,21 @@ async fn main() {
         .route("/provedor", post(save_provedor))
         .route("/provedor", put(update_provedor));
 
+    let util_router = Router::new()
+        .route("/endereco",get(show_endereco))
+        .route("/cep",get(lookup_cep))
+        .route("/cpf_cnpj", get(validate_cpf_cnpj))
+        .route("/telefone", get(validate_phone));
+
+    //TODO should test the app server
+    //maybe use axum_test, maybe use mockall, maybe use the 2 
     let app = Router::new()
         .nest("/cliente", clientes_routes)
         .nest("/mikrotik", mikrotik_routes)
         .nest("/plano", planos_routes)
         .nest("/financeiro", financial_routes)
         .nest("/config", config_routes)
+        .nest("/util", util_router)
         //.nest("/financeiro", financial_routes)
         .layer(Extension(pg_pool))
         .with_state(state)

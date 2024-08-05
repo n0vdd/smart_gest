@@ -5,7 +5,7 @@ use cpf::Cpf;
 use phonenumber::country::Id::BR;
 use reqwest::Client;
 use serde::Deserialize;
-use tera::{Context, Tera};
+use tera::Context;
 use thiserror::Error;
 use tracing::{debug, error};
 
