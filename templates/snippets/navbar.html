@@ -7,10 +7,74 @@
                 <a href="/cliente" class="hover:bg-gray-700 px-3 py-2 rounded" >Clientes</a>
                 <a href="/mikrotik" class="hover:bg-gray-700 px-3 py-2 rounded" >Mikrotik</a>
                 <a href="/plano" class="hover:bg-gray-700 px-3 py-2 rounded">Planos</a>
-                <a href="/financeiro/dici" class="hover:bg-gray-700 px-3 py-2 rounded">DICI</a>
-                <a href="/financeiro/nfs" class="hover:bg-gray-700 px-3 py-2 rounded">Nota Fiscal</a>
-                <a href="/config" class="hover:bg-gray-700 px-3 py-2 rounded">Config</a>
+                <div class="relative">
+                    <button class="hover:bg-gray-700 px-3 py-2 rounded focus:outline-none" id="financeiro-menu">Financeiro</button>
+                    <div class="absolute hidden bg-gray-800 rounded mt-2 w-48" id="financeiro-dropdown">
+                        <a href="/financeiro/dici" class="block px-4 py-2 text-white hover:bg-gray-700 rounded">DICI</a>
+                        <a href="/financeiro/nfs" class="block px-4 py-2 text-white hover:bg-gray-700 rounded">Nota Fiscal</a>
+                        <a href="/financeiro/contrato_template" class="block px-4 py-2 text-white hover:bg-gray-700 rounded">Contrato Template</a>
+                    </div>
+                </div>
+                <div class="relative">
+                    <button class="hover:bg-gray-700 px-3 py-2 rounded focus:outline-none" id="config-menu">Config</button>
+                    <div class="absolute hidden bg-gray-800 rounded mt-2 w-48" id="config-dropdown">
+                        <a href="/config/provedor" class="block px-4 py-2 text-white hover:bg-gray-700 rounded">Provedor</a>
+                        <a href="/config/nf" class="block px-4 py-2 text-white hover:bg-gray-700 rounded">Nota Fiscal</a>
+                        <a href="/config/email" class="block px-4 py-2 text-white hover:bg-gray-700 rounded">Email</a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </nav>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const financeiroMenu = document.getElementById('financeiro-menu');
+        const financeiroDropdown = document.getElementById('financeiro-dropdown');
+        const configMenu = document.getElementById('config-menu');
+        const configDropdown = document.getElementById('config-dropdown');
+
+
+        financeiroMenu.addEventListener('mouseenter', () => {
+            financeiroDropdown.classList.remove('hidden');
+        });
+
+        financeiroMenu.addEventListener('mouseleave', () => {
+            setTimeout(() => {
+                if (!financeiroDropdown.matches(':hover')) {
+                    financeiroDropdown.classList.add('hidden');
+                }
+            }, 100);
+        });
+
+        financeiroDropdown.addEventListener('mouseleave', () => {
+            financeiroDropdown.classList.add('hidden');
+        });
+
+        financeiroDropdown.addEventListener('mouseenter', () => {
+            financeiroDropdown.classList.remove('hidden');
+        });
+
+        // Config Dropdown
+        configMenu.addEventListener('mouseenter', () => {
+            configDropdown.classList.remove('hidden');
+        });
+
+        configMenu.addEventListener('mouseleave', () => {
+            setTimeout(() => {
+                if (!configDropdown.matches(':hover')) {
+                    configDropdown.classList.add('hidden');
+                }
+            }, 100);
+        });
+
+        configDropdown.addEventListener('mouseleave', () => {
+            configDropdown.classList.add('hidden');
+        });
+
+        configDropdown.addEventListener('mouseenter', () => {
+            configDropdown.classList.remove('hidden');
+        });
+    });
+</script>

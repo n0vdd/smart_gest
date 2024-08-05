@@ -14,16 +14,16 @@ use chrono::{Datelike, Duration, Utc};
 use cron::Schedule;
 use db::create_postgres_pool;
 use handlers::clients::{bloqueia_cliente_no_radius, bloqueia_clientes_atrasados, delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
+use handlers::config::{save_email_config, save_nf_config, save_provedor, show_email_config, show_nf_config, show_provedor_config, update_email_config, update_nf_config, update_provedor};
 use handlers::contrato::{add_contrato_template, generate_contrato, show_contrato_template_add_form, show_contrato_template_edit_form, show_contrato_template_list};
 use handlers::dici::{generate_dici, generate_dici_month_year, show_dici_list};
 use handlers::mikrotik::{delete_mikrotik, failover_mikrotik_script, failover_radius_script, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
+use handlers::nfs::show_export_lotes_list;
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
-use models::client::{Cliente, ClienteNf, TipoPessoa};
-use models::plano::TipoPagamento;
+use lettre::{AsyncSmtpTransport, SmtpTransport, Tokio1Executor};
 use once_cell::sync::Lazy;
-use radius::{bloqueia_cliente_radius, create_radius_cliente_pool, create_radius_plano_bloqueado};
-use services::nfs::gera_nfs;
+use radius::{create_radius_cliente_pool, create_radius_plano_bloqueado};
 use services::nfs::exporta_nfs;
 use services::voip::checa_voip_down;
 use services::webhooks::webhook_handler;
@@ -67,6 +67,10 @@ lazy_static! {
     };
 }
 
+#[derive(Clone)]
+pub struct AppState {
+    pub mailer: Option<AsyncSmtpTransport<Tokio1Executor>>,
+}
 
 // Define the valid access token
 static VALID_ACCESS_TOKEN: &str = "m+/t\"]9lhtyh{2}s&%Wt";    
@@ -185,6 +189,13 @@ async fn main() {
     dotenv::dotenv().ok();
     tracing_subscriber::fmt::init();
 
+    let state = AppState { mailer: None };
+
+    Command::new("chromedriver").spawn().map_err(|e| {
+        error!("Failed to start chromedriver: {:?}", e);
+        panic!("Failed to start chromedriver")
+    }).expect("Failed to start chromedriver");
+
     //Setup db
     let pg_pool = Arc::new(create_postgres_pool().await
     .map_err(|e| -> _ {
@@ -261,16 +272,30 @@ async fn main() {
         .route("/contrato_template", get(show_contrato_template_list))
         .route("/contrato_template", post(add_contrato_template))
         .route("/contrato_template/add", get(show_contrato_template_add_form))
-        .route("/contrato_template/:id",get(show_contrato_template_edit_form))
+        .route("/contrato_template/:id", get(show_contrato_template_edit_form))
+        .route("/nfs", get(show_export_lotes_list))
         .route("/dici", get(show_dici_list));
+
+    let config_routes = Router::new()
+        .route("/nf", get(show_nf_config))
+        .route("/nf", post(save_nf_config))
+        .route("/nf", put(update_nf_config))
+        .route("/email",get(show_email_config))
+        .route("/email",post(save_email_config))
+        .route("/email",put(update_email_config))
+        .route("/provedor", get(show_provedor_config))
+        .route("/provedor", post(save_provedor))
+        .route("/provedor", put(update_provedor));
 
     let app = Router::new()
         .nest("/cliente", clientes_routes)
         .nest("/mikrotik", mikrotik_routes)
         .nest("/plano", planos_routes)
         .nest("/financeiro", financial_routes)
+        .nest("/config", config_routes)
         //.nest("/financeiro", financial_routes)
         .layer(Extension(pg_pool))
+        .with_state(state)
 //        .layer(Extension(mysql_pool))
         .layer(TraceLayer::new_for_http());
     //TODO add cors 

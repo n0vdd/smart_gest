@@ -7,4 +7,5 @@ pub mod utils;
 pub mod contrato;
 mod login;
 pub mod dici;
-mod config;
+pub mod config;
+pub mod nfs;

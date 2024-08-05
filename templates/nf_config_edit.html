@@ -1,0 +1,17 @@
+{% extends "snippets/base.html" %}
+{% block content %}
+<div class="container mx-auto p-4">
+    <h1 class="text-2xl font-bold mb-4">Add NF Config</h1>
+    <form method="put" action="/config/nf" class="space-y-4">
+        <div class="flex items-center">
+            <label for="contabilidade_email" class="w-1/4 text-right mr-4">Contabilidade Email</label>
+            <input type="email" value="{{ email }}" class="w-3/4 p-2 border border-gray-300 rounded" id="contabilidade_email" name="contabilidade_email" placeholder="Contabilidade Email">
+        </div>
+        <div class="flex justify-end">
+            <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                Add NF Config
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock content %}

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use anyhow::anyhow;
-use axum::{http::{self}, response::IntoResponse, Extension, Json};
+use anyhow::{anyhow, Context};
+use axum::{extract::State, http::{self}, response::IntoResponse, Extension, Json};
 use chrono::{Datelike, Local};
 use radius::{bloqueia_cliente_radius, checa_cliente_bloqueado_radius, desbloqueia_cliente};
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use sqlx::{query, query_as, PgPool};
 use time::macros::format_description;
 use tracing::{debug, error};
 
-use crate::{handlers::planos::find_plano_by_cliente, models::{client::{Cliente, ClienteDto, ClienteNf}, plano::{Plano, TipoPagamento}}, services::nfs::gera_nfs};
+use crate::{handlers::planos::find_plano_by_cliente, models::{client::{Cliente, ClienteDto, ClienteNf}, plano::{Plano, TipoPagamento}}, services::nfs::gera_nfs, AppState};
 
 
 ///!this is the api key for the sandbox, it should be set on the env for production
@@ -88,7 +88,7 @@ pub struct Payload {
 //TODO gerar nota fiscal de servico apos receber pagamento
 //TODO radius deveria checar todo dia 12 os clientes que nao tem um pagamente confirmado
 pub async fn webhook_handler(
-   Extension(pool):Extension<Arc<PgPool>>,Json(webhook_data):Json<Payload>) -> impl IntoResponse {
+   Extension(pool):Extension<Arc<PgPool>>,State(state):State<AppState>,Json(webhook_data):Json<Payload>) -> impl IntoResponse {
    debug!("Webhook data: {:?}", webhook_data);
 
    let format = format_description!("[year]-[month]-[day]");
@@ -147,7 +147,8 @@ pub async fn webhook_handler(
                   cep: cliente.cep.clone(),
                };
 
-               gera_nfs(&cliente_nf,webhook_data.payment_data.net_value).await;
+               gera_nfs(&pool,&cliente_nf,webhook_data.payment_data.net_value,state.mailer).await.context("Erro ao gerar nota fiscal de servico")
+                  .expect("Erro ao gerar nota fiscal");
 
                if checa_cliente_bloqueado_radius(&cliente.nome).await.map_err(|e| {
                   error!("Failed to check if client is blocked: {:?}", e);
