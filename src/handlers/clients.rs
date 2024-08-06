@@ -1,6 +1,5 @@
-use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
+use axum::{extract::{Path, State}, response::{Html, IntoResponse, Redirect}, Extension};
 use radius::{bloqueia_cliente_radius, add_cliente_radius, ClienteNas};
-use tera::Tera;
 use time::{macros::format_description, PrimitiveDateTime};
 use tracing::{debug, error};
 use axum_extra::extract::Form;
@@ -10,7 +9,7 @@ use std::sync::Arc;
 use sqlx::{query, query_as, PgPool};
 
 
-use crate::{models::{client::{Cliente, ClienteDto, SimpleCliente, TipoPessoa}, mikrotik::Mikrotik, plano::Plano}, services::webhooks::add_cliente_to_asaas, TEMPLATES};
+use crate::{models::{client::{Cliente, ClienteDto, SimpleCliente, TipoPessoa}, mikrotik::Mikrotik, plano::Plano}, services::webhooks::add_cliente_to_asaas, AppState, TEMPLATES};
 
 async fn get_all_clientes(pool: &PgPool) -> Result<Vec<SimpleCliente>, anyhow::Error> {
     query_as!(SimpleCliente, "SELECT id,login FROM clientes")
@@ -223,6 +222,7 @@ pub async fn show_cliente_form(
 //this can be a source of errors on the cliente side pela falta de atencao
 pub async fn register_cliente(
     Extension(pool): Extension<Arc<PgPool>>,
+    State(state): State<AppState>,
     Form(mut client): Form<ClienteDto>,
 ) -> impl IntoResponse {
 
@@ -319,7 +319,7 @@ pub async fn register_cliente(
     }).expect("Failed to fetch plan name");
 
     //Cria cliente e assinatura no radius
-    add_cliente_to_asaas(&client,&plano).await.map_err(|e| {
+    add_cliente_to_asaas(&client,&plano,&state.http_client).await.map_err(|e| {
         error!("Failed to add client to asaas: {:?}", e);
         return Html("Failed to add client to asaas")
     }).expect("Failed to add client to asaas");

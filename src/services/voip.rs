@@ -3,8 +3,7 @@ use tracing::{error, warn};
 
 
 //TODO this could all be done with reqwest i think
-pub async fn checa_voip_down() -> Result<(),anyhow::Error>{
-    let client = reqwest::Client::new();
+pub async fn checa_voip_down(client: &reqwest::Client) -> Result<(),anyhow::Error>{
     //Check all the devices
     let res = client.get("http://172.27.27.37:7557/devices?projection=InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.1.Enable,InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.1.Status,_id")
         .send().await.context("Failed to get routers")?

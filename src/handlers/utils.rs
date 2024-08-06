@@ -1,5 +1,5 @@
 use std::env;
-use axum::{extract::Query, response::Html};
+use axum::{extract::{Query, State}, response::Html};
 use cnpj::Cnpj;
 use cpf::Cpf;
 use phonenumber::country::Id::BR;
@@ -9,7 +9,7 @@ use tera::Context;
 use thiserror::Error;
 use tracing::{debug, error};
 
-use crate::{models::{client::TipoPessoa, endereco::EnderecoDto}, TEMPLATES};
+use crate::{models::{client::TipoPessoa, endereco::EnderecoDto}, AppState, TEMPLATES};
 
 
 
@@ -19,6 +19,7 @@ use crate::{models::{client::TipoPessoa, endereco::EnderecoDto}, TEMPLATES};
 //renderiza uma template com os dados do endereco
 //retorna um snippet do html de endereco com os dados prenchidos de acordo com a resposta da api
 pub async fn lookup_cep(
+    State(state): State<AppState>,
     Query(query): Query<CepQuery>,
 ) -> Result<Html<String>, Html<String>> {
     debug!("Looking up CEP: {}", query.cep);
@@ -32,8 +33,7 @@ pub async fn lookup_cep(
     let url = url_template.replace("%s", &query.cep);
 
     debug!("Requesting: {}", url);
-    let client = Client::new();
-    let response = client.get(&url).send().await
+    let response = state.http_client.get(&url).send().await
     .map_err(|e | -> _ {
         error!("Failed to send request: {:?}", e);
         return Html("Falha ao enviar pedido para a API".to_string())

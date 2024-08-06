@@ -46,11 +46,8 @@ pub async fn download_nf_nao_enviada() -> Result<(),anyhow::Error> {
     chrome_options.insert("args".to_string(), json!(["--kiosk-printing"]));
     caps.insert("goog:chromeOptions".to_string(), json!(chrome_options));
 
-    let client = ClientBuilder::native()
-        .capabilities(caps)
-        .connect("http://localhost:9515")
-        .await
-        .context("Erro ao conectar ao WebDriver")?;
+    let client = ClientBuilder::native().capabilities(caps)
+    .connect("http://localhost:9515").await.context("Erro ao conectar ao WebDriver")?;
 
     //TODO login to the system
     login(&client).await.context("Erro ao logar no sistema de nota fiscal")?;
@@ -76,13 +73,14 @@ pub async fn download_nf_nao_enviada() -> Result<(),anyhow::Error> {
     .click()
     .await.context("failed to click imprimir button")?;
 
+    /* 
     //maybe this will already save the pdf, if not will need to click on the save button
     client.wait().for_element(Locator::Id("content")).await.context("failed to find salvar button")?;
 
     client.find(Locator::Id("content")).await.context("failed to find salvar button")?
     .click()
     .await.context("failed to click salvar button")?;
-
+    */
     /* 
     //caminho: notas_fiscais/{cliente_nome}/{data}.pdf
     //e salvar um o pagamento relacionado,o caminho e a data no banco de dados
@@ -129,7 +127,8 @@ pub async fn download_nf_nao_enviada() -> Result<(),anyhow::Error> {
 }
 
 
-//TODO cancela nota fiscal
+//TODO cancelar nota fiscal, necessario checar se a nota fiscal existe
+//cancela a mesma, tera que ser passada o cliete relevante e a data imagino
 pub async fn cancela_nfs() -> Result<(),anyhow::Error> {
  
 
@@ -153,7 +152,7 @@ pub async fn cancela_nfs() -> Result<(),anyhow::Error> {
     Ok(())
 }
 
-fn setup_chromedriver() -> serde_json::Map<String, serde_json::Value> {
+fn setup_export_chromedriver() -> serde_json::Map<String, serde_json::Value> {
     // Define the Chrome options with download preferences
     //BUG download dir e um caminho completo, quando mudar de servidor tenho que alterar aqui
     let download_dir = "/home/user/code/smart_gest/nota_fiscal/export_lotes/"; 
@@ -172,7 +171,7 @@ fn setup_chromedriver() -> serde_json::Map<String, serde_json::Value> {
 }
 
 pub async fn exporta_nfs(pool: &PgPool,mailer:&AsyncSmtpTransport<Tokio1Executor> ) -> Result<(),anyhow::Error> {
-    let caps = setup_chromedriver();
+    let caps = setup_export_chromedriver();
 
     let client = ClientBuilder::native()
     .capabilities(caps)
@@ -300,9 +299,26 @@ pub async fn exporta_nfs(pool: &PgPool,mailer:&AsyncSmtpTransport<Tokio1Executor
     Ok(())
 }
 
-pub async fn gera_nfs(pool:&PgPool,cliente:&ClienteNf,value:f32,mailer: Option<AsyncSmtpTransport<Tokio1Executor>>) -> Result<(),anyhow::Error> {
+fn setup_gera_nf_chromedriver(nome: &str) -> serde_json::Map<String, serde_json::Value> {
+    let download_dir = format!("/home/user/code/smart_gest/nota_fiscal/{}", nome);
+    let mut caps = serde_json::Map::new();
+    let mut prefs = serde_json::Map::new();
+    prefs.insert("download.default_directory".to_string(), serde_json::Value::String(download_dir.to_string()));
 
-    let client = ClientBuilder::native().connect("http://localhost:9515").await.map_err(|e| {
+    let mut chrome_options = serde_json::Map::new();
+    chrome_options.insert("args".to_string(), json!(["--kiosk-printing"]));
+    chrome_options.insert("prefs".to_string(), serde_json::Value::Object(prefs));
+    caps.insert("goog:chromeOptions".to_string(), json!(chrome_options));
+
+    caps
+}
+
+pub async fn gera_nfs(pool:&PgPool,cliente:&ClienteNf,value:f32,mailer: Option<AsyncSmtpTransport<Tokio1Executor>>,payment_id: i32) -> Result<(),anyhow::Error> {
+    let caps = setup_gera_nf_chromedriver(&cliente.nome);
+
+    let client = ClientBuilder::native()
+    .capabilities(caps)
+    .connect("http://localhost:9515").await.map_err(|e| {
         error!("failed to connect to WebDriver: {:?}", e);
         e
     }).expect("failed to connect to WebDriver");
@@ -325,15 +341,18 @@ pub async fn gera_nfs(pool:&PgPool,cliente:&ClienteNf,value:f32,mailer: Option<A
 
     dados_nfs(&cliente, &client, value).await.context("Erro ao colocar dados da nota fiscal: endereco,valor servico,etc...")?;
 
-    //TODO salvar a mesma para o sistema de arquivos
-    //caminho: notas_fiscais/{cliente_nome}/{data}.pdf
+    //Salva nota fisca com a data em nota fiscal/{cliente_nome}/{data}.pdf,retorna o caminho da mesma
     let nf = salvar_nota_fiscal(&client, &cliente.nome).await.context("Erro ao salvar nota fiscal")?;
 
+    //BUG o fato de salvar depender de haver um email nao seria ideal
     if let Some(mailer) = mailer {
-        send_nf(&pool, &mailer, &cliente.email, nf, &cliente.nome, value)
+        //TODO create some kind of retry logic based on it,idk
+        let sent = send_nf(&pool, &mailer, &cliente.email, &nf, &cliente.nome, value)
         .await.context("Erro ao enviar email com nota fiscal")?;
+
+        query!("INSERT INTO nfs (path, payment_received_id, sent) VALUES ($1, $2, $3)", &nf.to_str().unwrap(), payment_id, sent)
+            .execute(pool).await.context("Erro ao salvar nota fiscal no banco de dados")?;
     }
-    //e salvar um o pagamento relacionado,o caminho e a data no banco de dados
     Ok(())
 }
 
@@ -347,17 +366,11 @@ async fn salvar_nota_fiscal(client:&Client,nome:&str) -> Result<PathBuf,anyhow::
     .click()
     .await.context("failed to click imprimir button")?;
 
-    //maybe this will already save the pdf, if not will need to click on the save button
-    client.wait().for_element(Locator::Css("cr-button.action-button")).await.context("failed to find salvar button")?;
-
-    client.find(Locator::Css("cr-button.action-button")).await.context("failed to find salvar button")?
-    .click()
-    .await.context("failed to click salvar button")?;
-
     //caminho: notas_fiscais/{cliente_nome}/{data}.pdf
     //e salvar um o pagamento relacionado,o caminho e a data no banco de dados
     let path = format!("nota_fiscal/{}/",nome);
     let mut dir = read_dir(&path).await.context("failed to read dir")?;
+
     // Variables to track the last modified file
     let mut last_modified_file: Option<(PathBuf, SystemTime)> = None;
 
@@ -378,7 +391,7 @@ async fn salvar_nota_fiscal(client:&Client,nome:&str) -> Result<PathBuf,anyhow::
 
         // Rename the last modified file to include the current date
         if let Some((last_file_path, _)) = last_modified_file.clone() {
-            let current_date = Local::now().format("%d-%m-%Y").to_string();
+            let current_date = Local::now().format("%d_%m_%Y").to_string();
             let new_file_name = format!("{}/{}.pdf", path, current_date);
             rename(&last_file_path, &new_file_name).await.context("Failed to rename file")?;
         } else {
@@ -386,7 +399,7 @@ async fn salvar_nota_fiscal(client:&Client,nome:&str) -> Result<PathBuf,anyhow::
         }
     }
 
-    //return the path to the file
+    //return the path to the file,for sending the email for the cliente
     Ok(last_modified_file.unwrap().0)
 }
 

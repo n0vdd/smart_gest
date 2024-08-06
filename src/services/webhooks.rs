@@ -4,103 +4,52 @@ use anyhow::{anyhow, Context};
 use axum::{extract::State, http::{self}, response::IntoResponse, Extension, Json};
 use chrono::{Datelike, Local};
 use radius::{bloqueia_cliente_radius, checa_cliente_bloqueado_radius, desbloqueia_cliente};
-use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as, PgPool};
 use time::macros::format_description;
 use tracing::{debug, error};
 
-use crate::{handlers::planos::find_plano_by_cliente, models::{client::{Cliente, ClienteDto, ClienteNf}, plano::{Plano, TipoPagamento}}, services::nfs::gera_nfs, AppState};
-
+use crate::{handlers::planos::find_plano_by_cliente, models::{client::{Cliente, ClienteDto, ClienteNf}, plano::Plano, webhook::{Assinatura, BillingType, ClienteApi, ClientePost, CustomerList, Event, Fine, Interest, Payload}}, services::nfs::gera_nfs, AppState};
 
 ///!this is the api key for the sandbox, it should be set on the env for production
 const API_KEY: &str = "$aact_YTU5YTE0M2M2N2I4MTliNzk0YTI5N2U5MzdjNWZmNDQ6OjAwMDAwMDAwMDAwMDAwODUzNzI6OiRhYWNoXzAzYTI4MDhmLWI0NmItNDliNC1hNTIwLTRkNWUzZDBjNTQxZg==";
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum BillingType {
-   Boleto,
-   CreditCard,
-   Undefined,
-   DebitCard,
-   Transfer,
-   Deposit,
-   Pix,
-}
+//sandbox
+const SANDBOX_USER_URL : &str = "https://sandbox.asaas.com/api/v3/customers/";
+const SANDBOX_ASSINATURA_URL : &str = "https://sandbox.asaas.com/api/v3/subscriptions";
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum Event {
-   PaymentCreated,
-   PaymentAwaitingRiskAnalysis,
-   PaymentApprovedByRiskAnalysis,
-   PaymentReprovedByRiskAnalysis,
-   PaymentAuthorized,
-   PaymentUpdated,
-   PaymentConfirmed,
-   PaymentReceived,
-   PaymentCreditCardCaptureRefused,
-   PaymentAnticipated,
-   PaymentOverdue,
-   PaymentDeleted,
-   PaymentRestored,
-   PaymentRefunded,
-   PaymentPartiallyRefunded,
-   PaymentRefundInProgress,
-   PaymentReceivedInCashUndone,
-   PaymentChargebackRequested,
-   PaymentChargebackDispute,
-   PaymentAwaitingChargebackReversal,
-   PaymentDunningReceived,
-   PaymentDunningRequested,
-   PentBankSlipViewed,
-   PaymentCheckoutViewed,
-}
+//dia 12 do mes os clientes que nao tiverem um pagamento confirmado serao desativados do servidor radius
+//feito no scheduler in main
 
-#[derive(Serialize, Deserialize, Debug)]
-struct Payment {
-   id: String,
-   #[serde(rename = "dateCreated")]
-   date_created: String,
-   // sera usado para linkar ao cliente
-   customer: String,
-   #[serde(rename = "paymentDate")]
-   payment_date: Option<String>,
-   #[serde(rename = "confirmedDate")]
-   confirmed_date: Option<String>,
-   #[serde(rename = "billingType")]
-   billing_type: BillingType,
-   #[serde(rename = "netValue")]
-   net_value: f32,
-
-}
-
-#[derive(Serialize,Deserialize,Debug)]
-pub struct Payload {
-      id: String,
-      event: Event,
-      #[serde(rename = "dateCreated")]
-      date_created: String,
-      #[serde(rename = "payment")]
-      payment_data: Payment,
-}
-
-//todo dia 12 do mes os clientes que nao tiverem um pagamento confirmado serao desativados do servidor radius
-//TODO gerar nota fiscal de servico apos receber pagamento
-//TODO radius deveria checar todo dia 12 os clientes que nao tem um pagamente confirmado
+//TODO could test with mocks, i can create some payloads based on examples, and test the handler
+//abstract the db calls, so i can test the handler without the db,what do i need to test that not saving to db?
+//lida com todos os webhooks do asaas, necessario ser assim para como o webhook funciona
+//os eventos que importam sao os flows, pagamento confirmado, pagamento recebido, pagamento estornado
+//primeiro recebemos o pagamento confirmado, checamos se e um webhook re-enviado,caso nao, salva na db
+//checa se o cliente esta bloqueado, caso esteja, desbloqueia ele
+//?talvez eu devesse gerar a nota fiscal de servico aqui, e nao no handler de pagamento recebido, mais provavel de acabar cancelando,nao ideal
+//caso de pagamento recebido, checa se o pagamento foi feito por boleto, pix ou cartao de credito(so aceitamos esses tipos de pagamento)
+//gera a nota fiscal de servico e envia para o cliente, desbloqueia o cliente caso ele esteja bloqueado
+//caso de pagamento estornado, bloqueia o cliente no servidor radius e cancela a nota fiscal(caso a mesma ja tenha sido gerada)
+//TODO ainda nao vi como sera feita a parte de cancelar a nota fiscal de servico
 pub async fn webhook_handler(
-   Extension(pool):Extension<Arc<PgPool>>,State(state):State<AppState>,Json(webhook_data):Json<Payload>) -> impl IntoResponse {
+   Extension(pool):Extension<Arc<PgPool>>,State(state):State<AppState>
+   ,Json(webhook_data):Json<Payload>) -> impl IntoResponse {
    debug!("Webhook data: {:?}", webhook_data);
 
    let format = format_description!("[year]-[month]-[day]");
    match webhook_data.event {
+      //Essa area apenas lida com db, salva o pagamento confirmado
+      //checa se o cliente esta bloqueado, e desbloqueia ele caso o mesmo esteja
       Event::PaymentConfirmed => {
          // Check if the event already exists in payment_confirmed table
          if !check_if_payment_exists(&webhook_data.id, "payment_confirmed", &*pool).await.expect("Erro ao checar se o pagamento ja existe") {
-            save_payment_confirmed(&pool, &webhook_data, format).await.expect("Erro ao salvar pagamento confirmado");
+            //TODO should just pass the cliente
+            save_payment_confirmed(&pool, &webhook_data, format,&state.http_client).await.expect("Erro ao salvar pagamento confirmado");
          }
          
-         let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
+         let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool,&state.http_client).await.map_err(|e| {
             error!("Failed to fetch client: {:?}", e);
+            //TODO maybe i should return a StatusCode
             anyhow::anyhow!("Erro ao buscar cliente no sistema asaas")
          }).expect("Erro ao buscar cliente");
 
@@ -121,14 +70,14 @@ pub async fn webhook_handler(
          http::StatusCode::OK
       }, 
 
+      //Salva o pagamento recebido, gera a nota fiscal de servico e manda por email para o cliente
+      //desbloqueia o cliente caso ele esteja bloqueado
       Event::PaymentReceived => {
-      //Gero nota fiscal ao confirmar o pagamento e cancela ela ao receber refund
-         //TODO tenho que gerar nota fiscal quando o pagamento e recebido
          match webhook_data.payment_data.billing_type {
             BillingType::Boleto | BillingType::Pix | BillingType::CreditCard => {
-               //TODO gerar nota fiscal de servico
                debug!("Gerando nota fiscal de servico para cliente: {:?}", webhook_data.payment_data.customer);
-               let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
+
+               let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool,&state.http_client).await.map_err(|e| {
                   error!("Failed to fetch client: {:?}", e);
                   e
                }).expect("Erro ao buscar cliente");
@@ -147,9 +96,6 @@ pub async fn webhook_handler(
                   cep: cliente.cep.clone(),
                };
 
-               gera_nfs(&pool,&cliente_nf,webhook_data.payment_data.net_value,state.mailer).await.context("Erro ao gerar nota fiscal de servico")
-                  .expect("Erro ao gerar nota fiscal");
-
                if checa_cliente_bloqueado_radius(&cliente.nome).await.map_err(|e| {
                   error!("Failed to check if client is blocked: {:?}", e);
                   anyhow!("Erro ao checar se o cliente esta bloqueado")
@@ -164,7 +110,16 @@ pub async fn webhook_handler(
                      anyhow!("Erro ao desbloquear cliente")
                   }).expect("Erro ao desbloquear cliente");
                }
+               
+               // Check if the event already exists in payment_received table
+               if !check_if_payment_exists(&webhook_data.id, "payment_received", &*pool).await.expect("Erro ao checar se o pagamento ja existe") {
+                  let id = save_payment_received(&pool, &webhook_data, format).await.expect("Erro ao salvar pagamento recebido");
+                  gera_nfs(&pool,&cliente_nf,webhook_data.payment_data.net_value,state.mailer,id).await.context("Erro ao gerar nota fiscal de servico")
+                     .expect("Erro ao gerar nota fiscal");
+               }
             },
+            //Flow com algum tipo de pagamento sem ser boleto/pix ou cartao
+            //nao criamos esse tipo de assinatura para os clientes
             _ => {
                //TODO mandar algum aviso e logar, nao deveria nem chegar nesse flow
                //so vendemoos boleto, cartao de credito e pix
@@ -175,10 +130,7 @@ pub async fn webhook_handler(
             }
          }
 
-         // Check if the event already exists in payment_received table
-         if !check_if_payment_exists(&webhook_data.id, "payment_received", &*pool).await.expect("Erro ao checar se o pagamento ja existe") {
-            save_payment_received(&pool, &webhook_data, format).await.expect("Erro ao salvar pagamento recebido");
-         }
+         //gera nota fiscal e envia para o cliente
 
          http::StatusCode::OK
       },
@@ -186,7 +138,7 @@ pub async fn webhook_handler(
       Event::PaymentRefunded => {
          //TODO cancelar nota fiscal de servico
          if Local::now().day() >= 12 {
-            let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
+            let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool,&state.http_client).await.map_err(|e| {
                error!("Failed to fetch client: {:?}", e);
                anyhow!("Erro ao buscar cliente no sistema asaas")
             }).expect("Erro ao buscar cliente");
@@ -201,8 +153,9 @@ pub async fn webhook_handler(
       }, 
 
       Event::PaymentRefundInProgress => {
+         //TODO cancelar nota fiscal de servico
          if Local::now().day() >= 12 {
-            let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
+            let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool,&state.http_client).await.map_err(|e| {
                error!("Failed to fetch client: {:?}", e);
                anyhow!("Erro ao buscar cliente no sistema asaas")
             }).expect("Erro ao buscar cliente");
@@ -221,80 +174,32 @@ pub async fn webhook_handler(
    }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct CustomerData {
-   object: String,
-   id: String,
-   #[serde(rename = "dateCreated")]
-   date_created: String,
-   name: String,
-   email: String,
-   #[serde(rename = "cpfCnpj")]
-   cpf_cnpj: String,
-   #[serde(rename = "mobilePhone")]
-   mobile_phone: String,
-   deleted: bool,
-}
-#[derive(Serialize, Deserialize, Debug)]
-struct CustomerList {
-   object: String,
-   #[serde(rename = "hasMore")]
-   has_more: bool,
-   #[serde(rename = "totalCount")]
-   total_count: i32,
-   limit: i32,
-   offset: i32,
-   data: Vec<CustomerData>,
-}
 
-#[derive(Serialize, Deserialize, Debug)]
-struct ClientePost{
-   name: String,
-   email: String,
-   #[serde(rename = "cpfCnpj")]
-   cpf_cnpj: String,
-   #[serde(rename = "mobilePhone")]
-   mobile_phone:String,
-   #[serde(rename = "postalCode")]
-   postal_code: String,
-   #[serde(rename = "addressNumber")]
-   address_number: String
-}
-
-pub async fn add_cliente_to_asaas(cliente:&ClienteDto,plano:&Plano) -> Result<(), anyhow::Error> {
+//TODO o codigo que chama esse deve mapear  o erro para um StatusCode
+//Cria o cliente e a assinatura
+pub async fn add_cliente_to_asaas(cliente:&ClienteDto,plano:&Plano,client:&reqwest::Client) -> Result<(), anyhow::Error> {
+   //checa a flag setada ao cadastrar o cliente
+   //true por padrao
    if cliente.add_to_asaas == false {
       return Ok(());
    }
 
-   let client = reqwest::Client::new();
-   
-   let url = format!("https://sandbox.asaas.com/api/v3/customers/");
-
    //Pega uma  lista com todos os clientes
-   client.get(&url).header("access_token",API_KEY)
+   client.get(SANDBOX_USER_URL).header("access_token",API_KEY)
       .header("accept", "application/json")
       .header("user-agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-      .send().await.map(|response| {
-         debug!("Cliente Response: {:?}", response);
-         response
-      }).map_err(|e | {
+      .send().await
+      .map_err(|e | {
          error!("Failed to fetch clients: {:?}", e);
          anyhow::anyhow!("Erro ao buscar clientes do sistema asaas")
       })?
-      .json::<CustomerList>().await.map(|response| {
-         debug!("Clientes em json: {:?}", response);
-         response
-      }).map_err(|e| {
+      .json::<CustomerList>().await
+      .map_err(|e| {
          error!("Failed to parse clients: {:?}", e);
          anyhow::anyhow!("Erro ao realizar parse dos clientes")
       })?
-
       //Checa se o nome do cliente ja esta no sistema do asaas 
-      .data.iter().find(|cl| cl.name == cliente.nome).map(|name| {
-         debug!("Cliente ja existe: {:?}",name);
-         //Caso o cliente ja exista nao ha necessidade de crialo
-         anyhow::anyhow!("Cliente ja existe no sistema do asaas")
-      });
+      .data.iter().find(|cl| cl.name == cliente.nome);
 
    let post_cliente = ClientePost {
       name: cliente.nome.clone(),
@@ -307,7 +212,7 @@ pub async fn add_cliente_to_asaas(cliente:&ClienteDto,plano:&Plano) -> Result<()
 
 
    //Envia o cliente caso ele nao exista
-   let asaas_cliente = client.post(&url).header("access_token",API_KEY)
+   let asaas_cliente = client.post(SANDBOX_USER_URL).header("access_token",API_KEY)
       .header("accept", "application/json")
       .header("content-type", "application/json")
       .header("user-agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
@@ -319,47 +224,22 @@ pub async fn add_cliente_to_asaas(cliente:&ClienteDto,plano:&Plano) -> Result<()
          anyhow::anyhow!("Erro ao realizar parse do cliente")
       })?;
 
-      add_assinutara_cliente_asaas(&asaas_cliente,plano).await.map_err(|e| {
-         error!("Failed to add subscription: {:?}", e);
-         anyhow::anyhow!("Erro ao adicionar assinatura ao cliente")
-      })?;
+   add_assinutara_cliente_asaas(&asaas_cliente,plano,client).await.map_err(|e| {
+      error!("Failed to add subscription: {:?}", e);
+      anyhow::anyhow!("Erro ao adicionar assinatura ao cliente")
+   })?;
 
    Ok(())
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct Assinatura {
-   billing_type: TipoPagamento,
-   interest: Interest,
-   fine: Fine,
-   cycle: String,
-   value: f32,
-   customer: String,
-   #[serde(rename = "nextDueDate")]
-   next_due_date: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Fine {
-   value: f32,
-   #[serde(rename = "type")]
-   fine_type: String,
-}  
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Interest {
-   value: f32,
-}
-
-async fn add_assinutara_cliente_asaas(cliente_asaas:&ClienteApi,plano:&Plano) -> Result<(),anyhow::Error>{
+async fn add_assinutara_cliente_asaas(cliente_asaas:&ClienteApi,plano:&Plano,client:&reqwest::Client) -> Result<(),anyhow::Error>{
    let month = Local::now().month();
    let year = Local::now().year();
    //Smartcom comeca a cobrar 3 meses depois, sempre no dia 5
    let next_due_date= format!("{}-{}-5",year,month+3);
 
-   let url = "https://sandbox.asaas.com/api/v3/subscriptions";
 
-   let client = reqwest::Client::new().post(url)
+   let client = client.post(SANDBOX_ASSINATURA_URL)
    .header("accept", "application/json")
    .header("content-type", "application/json")
    .header("user-agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
@@ -390,7 +270,6 @@ async fn add_assinutara_cliente_asaas(cliente_asaas:&ClienteApi,plano:&Plano) ->
    })?;
 
    Ok(())
-
 } 
 
 async fn check_if_payment_exists(id: &str, table: &str, pool: &PgPool) -> Result<bool,anyhow::Error> {
@@ -411,21 +290,19 @@ async fn check_if_payment_exists(id: &str, table: &str, pool: &PgPool) -> Result
    Ok(event_id.is_some())
 }
 
-#[derive(Serialize,Deserialize,Debug)]
-struct ClienteApi {
-   id: String,
-   #[serde(rename = "cpfCnpj")]
-   cpf_cnpj: String,
-}
 
 //TODO usar api key no ambiente
-async fn find_api_cliente(id:&str,pool: &PgPool) -> Result<Cliente,anyhow::Error> {
+//Esse codigo so pega dado do asaas e comparo com a db, nao ha oque testar
+//TODO acha o cliente no sistema pelo id do asaas(poderia salvar o id do asaas na tabela do cliente(mais simples))
+//so precisaria pegar a id do cliente ao criar ele e colocar na db 
+//usar o reqwest cliente a partir do estado da aplicacao
+async fn find_api_cliente(id:&str,pool: &PgPool,client: &reqwest::Client) -> Result<Cliente,anyhow::Error> {
    //TODO send a request to this url: https://sandbox.asaas.com/api/v3/customers/{id}
    //producao: https://www.asaas.com/api/v3/customers/{id}
 
+   let url = format!("{}{}",SANDBOX_USER_URL,id);
    //get the cpfCnpj from the response and use it to find the cliente in the db
-   let client = reqwest::Client::new()
-      .get(format!("https://sandbox.asaas.com/api/v3/customers/{}",id))
+   let client = client.get(url)
       .header("access_token",API_KEY)
       .header("accept", "application/json")
       .header("user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
@@ -449,16 +326,17 @@ async fn find_api_cliente(id:&str,pool: &PgPool) -> Result<Cliente,anyhow::Error
       anyhow::anyhow!("Erro ao buscar cliente no banco de dados")
    })?;
 
-   //If the client does not exist, return an error
-   if cliente.is_none() {
-      Err(anyhow::anyhow!("Cliente nao encontrado"))
+   if let Some(cliente) = cliente {
+      Ok(cliente)
    } else {
-      Ok(cliente.unwrap())
+      //poderia so usar anyhow!
+      anyhow::bail!("Cliente nao encontrado no banco de dados")
    }
+
 }
 
 ///!This code is called only after a check if the event if exists on the db
-async fn save_payment_received(pool:&PgPool,webhook_data: &Payload,format: &[time::format_description::BorrowedFormatItem<'_>]) -> Result<(),anyhow::Error>{
+async fn save_payment_received(pool:&PgPool,webhook_data: &Payload,format: &[time::format_description::BorrowedFormatItem<'_>]) -> Result<i32,anyhow::Error>{
    if let Some(confirmed_data) = &webhook_data.payment_data.confirmed_date {
       // Format time for PostgreSQL
       let data = time::Date::parse(confirmed_data, format).map_err(|e| {
@@ -490,29 +368,37 @@ async fn save_payment_received(pool:&PgPool,webhook_data: &Payload,format: &[tim
             })?;
 
             //Save the payment_received in the db,linkink it to the payment_confirmed id
-            query!(
-               "INSERT INTO payment_received (event_id, payment_confirmed, payment_date) VALUES ($1, $2, $3)",
+            let id = query!(
+               "INSERT INTO payment_received (event_id, payment_confirmed, payment_date) VALUES ($1, $2, $3) RETURNING id",
                   webhook_data.id,
                   confirmed_id.id,
                   data
-            ).execute(&*pool)
+            ).fetch_one(&*pool)
             .await.map_err(|e| {
                error!("erro ao salvar pagamento {:?}", e);
                anyhow::anyhow!("Erro ao salvar pagamento recebido ao banco de dados")
             })?;
+
+            Ok(id.id)
+         } else {
+            anyhow::bail!("Data de pagamento nao encontrada")
          }
+      } else {
+         anyhow::bail!("Pagamento confirmado nao encontrado")
       }
+   } else {
+      anyhow::bail!("Data de pagamento confirmado nao encontrada")
    }
-   Ok(())
 }
 
 ///!This code is called only after a check if the event if exists on the db
-async fn save_payment_confirmed(pool:&PgPool,webhook_data: &Payload,format: &[time::format_description::BorrowedFormatItem<'_>]) -> Result<(),anyhow::Error>{
+//TODO this could get the cliente, there is a call to find_api_cliente after this code, so can use the cliente data directly,and dont call it again
+async fn save_payment_confirmed(pool:&PgPool,webhook_data: &Payload,format: &[time::format_description::BorrowedFormatItem<'_>],client:&reqwest::Client) -> Result<(),anyhow::Error>{
    debug!("Salvando pagamento confirmado: {:?}", webhook_data);
    //TODO maybe should check the event_id before saving it?
 
    //find the cliente from the asaas api
-   let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool).await.map_err(|e| {
+   let cliente = find_api_cliente(&webhook_data.payment_data.customer, &pool,client).await.map_err(|e| {
       error!("Failed to fetch client: {:?}", e);
       anyhow::anyhow!("Erro ao buscar cliente no sistema asaas")
    })?;

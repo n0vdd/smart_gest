@@ -71,6 +71,7 @@ lazy_static! {
 #[derive(Clone)]
 pub struct AppState {
     pub mailer: Option<AsyncSmtpTransport<Tokio1Executor>>,
+    pub http_client: reqwest::Client,
 }
 
 // Define the valid access token
@@ -141,7 +142,7 @@ async fn scheduler(pool: Arc<PgPool> ,state:AppState) -> Result<(), anyhow::Erro
             tokio::time::sleep(duration.to_std().unwrap()).await;
         }
 
-        checa_voip_down().await.context("Erro ao checar voip")?;
+        checa_voip_down(&state.http_client).await.context("Erro ao checar voip")?;
         info!("Voip check executed on {}", next);
     }
 
@@ -207,12 +208,14 @@ async fn main() {
 
     let mailer = setup_email(&pg_pool).await.ok();
     //TODO start emailer if there is a email config complete already
-    let state = AppState { mailer };
+
+    let state = AppState { mailer, http_client: reqwest::Client::new() };
 
     download_nf_nao_enviada().await.map_err(|e| {
         error!("Failed to download NFS: {:?}", e);
         panic!("Failed to download NFS")
     }).expect("Failed to download NFS");
+
     /* 
     let mysql_pool = Arc::new(radius::create_mysql_pool().await
     .map_err(|e| -> _ {

@@ -31,7 +31,7 @@ pub async fn setup_email(pool: &PgPool) -> Result<AsyncSmtpTransport<Tokio1Execu
     Ok(mailer)
 }
 
-pub async fn send_nf(pool:&PgPool, mailer: &AsyncSmtpTransport<Tokio1Executor>, to: &str, nf:PathBuf,nome:&str,valor:f32) -> Result<(),anyhow::Error> {
+pub async fn send_nf(pool:&PgPool, mailer: &AsyncSmtpTransport<Tokio1Executor>, to: &str, nf:&PathBuf,nome:&str,valor:f32) -> Result<bool,anyhow::Error> {
     let mut file = File::open(&nf).await?;
     let mut file_content = Vec::new();
     file.read_to_end(&mut file_content).await?;
@@ -78,7 +78,8 @@ pub async fn send_nf(pool:&PgPool, mailer: &AsyncSmtpTransport<Tokio1Executor>, 
 
     mailer.send(email).await.context("Erro ao enviar email")?;
 
-    Ok(())
+    //If mailer send dont fail returns true
+    Ok(true)
 }
 
 //TODO talves devesse ser enviado dia 5, fechar e comecar tudo de um dia 5 ao outro
