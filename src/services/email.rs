@@ -31,7 +31,7 @@ pub async fn setup_email(pool: &PgPool) -> Result<AsyncSmtpTransport<Tokio1Execu
     Ok(mailer)
 }
 
-pub async fn send_nf(pool:&PgPool, mailer: &AsyncSmtpTransport<Tokio1Executor>, to: &str, nf:&PathBuf,nome:&str,valor:f32) -> Result<bool,anyhow::Error> {
+pub async fn send_nf(pool:&PgPool, mailer: &AsyncSmtpTransport<Tokio1Executor>, to: &str, nf:String) -> Result<bool,anyhow::Error> {
     let mut file = File::open(&nf).await?;
     let mut file_content = Vec::new();
     file.read_to_end(&mut file_content).await?;
@@ -56,8 +56,6 @@ pub async fn send_nf(pool:&PgPool, mailer: &AsyncSmtpTransport<Tokio1Executor>, 
     //Sendo feito como se a nota fiscal emitida em novembro fosse referente ao servico de outubro a novembro
     let periodo = format!("{} - {}", inicio, fim);
     let mut context = tera::Context::new();
-    context.insert("nome", nome);
-    context.insert("valor", &valor.to_string());
     context.insert("data",&data );
     context.insert("periodo", &periodo);
     context.insert("nome_provedor",&nome_provedor);
@@ -71,7 +69,7 @@ pub async fn send_nf(pool:&PgPool, mailer: &AsyncSmtpTransport<Tokio1Executor>, 
             MultiPart::mixed()
                 .singlepart(
                     SinglePart::builder()
-                        .header(header::ContentType::TEXT_PLAIN)
+                        .header(header::ContentType::TEXT_HTML)
                         .body(body),
                 )
                 .singlepart(attachment))?; 

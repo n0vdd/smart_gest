@@ -3,9 +3,8 @@ use std::sync::Arc;
 use axum::{extract::State, response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
 use reqwest::StatusCode;
-use serde_json::json;
 use sqlx::{query, query_as, PgPool};
-use tracing::{error, info};
+use tracing::error;
 
 use crate::{models::config::{EmailConfig, EmailConfigDto, NfConfig, NfConfigDto, Provedor, ProvedorDto}, services::email::setup_email, AppState, TEMPLATES};
 
@@ -31,7 +30,8 @@ pub async fn show_provedor_config(Extension(pool):Extension<Arc<PgPool>>) -> imp
 pub async fn save_provedor(Extension(pool):Extension<Arc<PgPool>>,Form(provedor):Form<ProvedorDto>)
     -> impl IntoResponse {
     query!("INSERT INTO provedor (nome,cnpj,cep,rua,numero,bairro,cidade,estado,complemento,telefone,email,observacao) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
-        provedor.nome,provedor.cnpj,provedor.cep,provedor.rua,provedor.numero,provedor.bairro,provedor.cidade,provedor.estado,provedor.complemento,provedor.telefone,provedor.email,provedor.observacao)
+        provedor.nome,provedor.cnpj,provedor.endereco.cep,provedor.endereco.rua,provedor.endereco.numero,provedor.endereco.bairro,provedor.endereco.cidade
+        ,provedor.endereco.estado,provedor.endereco.complemento,provedor.telefone,provedor.email,provedor.observacao)
         .execute(&*pool).await
         .expect("Failed to insert provedor");
 

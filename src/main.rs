@@ -22,10 +22,11 @@ use handlers::nfs::show_export_lotes_list;
 use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use handlers::utils::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
 use lettre::{AsyncSmtpTransport, Tokio1Executor};
+use models::client::ClienteNf;
 use once_cell::sync::Lazy;
 use radius::{create_radius_cliente_pool, create_radius_plano_bloqueado};
 use services::email::setup_email;
-use services::nfs::{download_nf_nao_enviada, exporta_nfs};
+use services::nfs::{download_nf_nao_enviada, exporta_nfs, gera_nfs};
 use services::voip::checa_voip_down;
 use services::webhooks::webhook_handler;
 use sqlx::PgPool;
@@ -210,11 +211,6 @@ async fn main() {
     //TODO start emailer if there is a email config complete already
 
     let state = AppState { mailer, http_client: reqwest::Client::new() };
-
-    download_nf_nao_enviada().await.map_err(|e| {
-        error!("Failed to download NFS: {:?}", e);
-        panic!("Failed to download NFS")
-    }).expect("Failed to download NFS");
 
     /* 
     let mysql_pool = Arc::new(radius::create_mysql_pool().await

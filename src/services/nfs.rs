@@ -20,31 +20,24 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::Context;
 use chrono::{Datelike,Local};
-use lettre::{message::MessageBuilder, AsyncSmtpTransport, AsyncTransport, Message, SmtpTransport, Tokio1Executor, Transport};
-use lettre_email::Mailbox;
+use lettre::{AsyncSmtpTransport, Tokio1Executor};
 use serde_json::json;
 use sqlx::{query, PgPool};
 use tokio::{fs::{read_dir, rename}, time::sleep};
 use std::path::PathBuf;
 
-use fantoccini::{Client, ClientBuilder, Locator};
-use tracing::{debug, error, warn};
+use fantoccini::{wd::Capabilities, Client, ClientBuilder, Locator};
+use tracing::{debug, error, info, warn};
 
-use crate::{models::client::{Cliente, ClienteNf}, services::email::send_nf, TEMPLATES};
+use crate::{models::client::ClienteNf, services::email::send_nf};
 
 use super::email::send_nf_lote;
 
 //TODO download the nf emitida e nao enviada
 //irei testar tanto o envio de email para o cliente
 // quanto o processo de fazer download do arquivo pelo botao imprimir
-pub async fn download_nf_nao_enviada() -> Result<(),anyhow::Error> {
-    let mut caps = serde_json::Map::new();
-    let mut chrome_options = serde_json::Map::new();
-    //This saves the pdf to the default download dir
-    //just need to set the download dir and it should work, then i send the email
-    //TODO complete this when i get home
-    chrome_options.insert("args".to_string(), json!(["--kiosk-printing"]));
-    caps.insert("goog:chromeOptions".to_string(), json!(chrome_options));
+pub async fn download_nf_nao_enviada(pool:&PgPool,mailer: AsyncSmtpTransport<Tokio1Executor>) -> Result<(),anyhow::Error> {
+    let caps = setup_gera_nf_chromedriver("teste").await;
 
     let client = ClientBuilder::native().capabilities(caps)
     .connect("http://localhost:9515").await.context("Erro ao conectar ao WebDriver")?;
@@ -66,12 +59,9 @@ pub async fn download_nf_nao_enviada() -> Result<(),anyhow::Error> {
     .click()
     .await.context("Erro ao clicar no elemento para visualizar nota emitida")?;
 
-    //BUG maybe this doesnt match id
-    client.wait().for_element(Locator::Css("#BUTTON2.btnimprimir")).await.context("failed to find imprimir button")?;
+    let nf = salvar_nota_fiscal(&client, "teste")
+        .await.context("Erro ao salvar nota fiscal")?;    
 
-    client.find(Locator::Css("#BUTTON2.btnimprimir")).await.context("failed to find imprimir button")?
-    .click()
-    .await.context("failed to click imprimir button")?;
 
     /* 
     //maybe this will already save the pdf, if not will need to click on the save button
@@ -114,15 +104,6 @@ pub async fn download_nf_nao_enviada() -> Result<(),anyhow::Error> {
         }
     }
 */
-
-    //TODO navigate to the page with the nf emitida e nao enviada
-
-    //TODO visualize it(the same page after you emit it
-
-    //TODO find the imprimit button and complete the download flow
-
-    //TODO send it to the cliente
-
     Ok(())
 }
 
@@ -152,7 +133,7 @@ pub async fn cancela_nfs() -> Result<(),anyhow::Error> {
     Ok(())
 }
 
-fn setup_export_chromedriver() -> serde_json::Map<String, serde_json::Value> {
+fn setup_export_chromedriver() -> Capabilities {
     // Define the Chrome options with download preferences
     //BUG download dir e um caminho completo, quando mudar de servidor tenho que alterar aqui
     let download_dir = "/home/user/code/smart_gest/nota_fiscal/export_lotes/"; 
@@ -164,7 +145,7 @@ fn setup_export_chromedriver() -> serde_json::Map<String, serde_json::Value> {
     //prefs.insert("directory_upgrade".to_string(), serde_json::Value::Bool(true));
     chrome_options.insert("prefs".to_string(), serde_json::Value::Object(prefs));
 
-    let mut caps = serde_json::Map::new();
+    let mut caps = Capabilities::new();
     caps.insert("goog:chromeOptions".to_string(), serde_json::Value::Object(chrome_options));
 
     caps
@@ -296,25 +277,44 @@ pub async fn exporta_nfs(pool: &PgPool,mailer:&AsyncSmtpTransport<Tokio1Executor
     //TODO pegar a quantidade de notas fiscais do lote
     send_nf_lote(pool, mailer, last_modified_file.unwrap().0,0)
     .await.context("Erro ao enviar email com lote de nota fiscal")?;
+
     Ok(())
 }
 
-fn setup_gera_nf_chromedriver(nome: &str) -> serde_json::Map<String, serde_json::Value> {
-    let download_dir = format!("/home/user/code/smart_gest/nota_fiscal/{}", nome);
-    let mut caps = serde_json::Map::new();
-    let mut prefs = serde_json::Map::new();
-    prefs.insert("download.default_directory".to_string(), serde_json::Value::String(download_dir.to_string()));
+async fn setup_gera_nf_chromedriver(nome: &str) -> Capabilities {
+    // Define the download directory
+    let download_dir = format!("/home/user/code/smart_gest/nota_fiscal/{}/", nome);
+    //BUG this can be dangerous
+    //TODO should get the current directory and append the download_dir to it,since the app run on its dir
 
+    tokio::fs::create_dir_all(&download_dir).await.expect("failed to create download directory");
+
+    // Create the preferences map
+    let mut prefs = serde_json::Map::new();
+    prefs.insert("savefile.default_directory".to_string(), json!(download_dir));
+    prefs.insert("download.prompt_for_download".to_string(), json!(false));
+    prefs.insert("directory_upgrade".to_string(), json!(true));
+
+    // Create the chrome options map
     let mut chrome_options = serde_json::Map::new();
     chrome_options.insert("args".to_string(), json!(["--kiosk-printing"]));
-    chrome_options.insert("prefs".to_string(), serde_json::Value::Object(prefs));
+    //TODO make it headless and etc
+    //chrome_options.insert("args".to_string(), json!(["--headless=new,--disable-gpu,--no-sandbox,--disable-dev-shm-usage,--kiosk-printing"]));
+    chrome_options.insert("prefs".to_string(), json!(prefs));
+
+    // Create the capabilities map
+    let mut caps = Capabilities::new();
     caps.insert("goog:chromeOptions".to_string(), json!(chrome_options));
 
     caps
 }
 
 pub async fn gera_nfs(pool:&PgPool,cliente:&ClienteNf,value:f32,mailer: Option<AsyncSmtpTransport<Tokio1Executor>>,payment_id: i32) -> Result<(),anyhow::Error> {
-    let caps = setup_gera_nf_chromedriver(&cliente.nome);
+    if cliente.gera_nf == false {
+        return Ok(());
+    }
+
+    let caps = setup_gera_nf_chromedriver(&cliente.nome).await;
 
     let client = ClientBuilder::native()
     .capabilities(caps)
@@ -341,16 +341,17 @@ pub async fn gera_nfs(pool:&PgPool,cliente:&ClienteNf,value:f32,mailer: Option<A
 
     dados_nfs(&cliente, &client, value).await.context("Erro ao colocar dados da nota fiscal: endereco,valor servico,etc...")?;
 
+    sleep(Duration::from_secs(5)).await;
     //Salva nota fisca com a data em nota fiscal/{cliente_nome}/{data}.pdf,retorna o caminho da mesma
     let nf = salvar_nota_fiscal(&client, &cliente.nome).await.context("Erro ao salvar nota fiscal")?;
 
     //BUG o fato de salvar depender de haver um email nao seria ideal
     if let Some(mailer) = mailer {
         //TODO create some kind of retry logic based on it,idk
-        let sent = send_nf(&pool, &mailer, &cliente.email, &nf, &cliente.nome, value)
-        .await.context("Erro ao enviar email com nota fiscal")?;
+        let sent = send_nf(&pool, &mailer, &cliente.email, nf.clone())
+            .await.context("Erro ao enviar email com nota fiscal")?;
 
-        query!("INSERT INTO nfs (path, payment_received_id, sent) VALUES ($1, $2, $3)", &nf.to_str().unwrap(), payment_id, sent)
+        query!("INSERT INTO nfs (path, payment_received_id, sent) VALUES ($1, $2, $3)", nf.as_str(), payment_id, sent)
             .execute(pool).await.context("Erro ao salvar nota fiscal no banco de dados")?;
     }
     Ok(())
@@ -358,13 +359,16 @@ pub async fn gera_nfs(pool:&PgPool,cliente:&ClienteNf,value:f32,mailer: Option<A
 
 //the chromedriver will save to nota_fiscal/{cliente_nome} already
 //will need to get the last modified file and rename it to the date
-async fn salvar_nota_fiscal(client:&Client,nome:&str) -> Result<PathBuf,anyhow::Error> {
+async fn salvar_nota_fiscal(client:&Client,nome:&str) -> Result<String,anyhow::Error> {
     //BUG maybe this doesnt match id
-    client.wait().for_element(Locator::Css("#BUTTON2.btnimprimir")).await.context("failed to find imprimir button")?;
+    client.wait().for_element(Locator::Css("#BTNIMPRIMIR")).await.context("failed to find imprimir button")?;
+    sleep(Duration::from_secs(5)).await;
 
-    client.find(Locator::Css("#BUTTON2.btnimprimir")).await.context("failed to find imprimir button")?
+    client.find(Locator::Css("#BTNIMPRIMIR")).await.context("failed to find imprimir button")?
     .click()
     .await.context("failed to click imprimir button")?;
+
+    sleep(Duration::from_secs(10)).await;
 
     //caminho: notas_fiscais/{cliente_nome}/{data}.pdf
     //e salvar um o pagamento relacionado,o caminho e a data no banco de dados
@@ -394,13 +398,15 @@ async fn salvar_nota_fiscal(client:&Client,nome:&str) -> Result<PathBuf,anyhow::
             let current_date = Local::now().format("%d_%m_%Y").to_string();
             let new_file_name = format!("{}/{}.pdf", path, current_date);
             rename(&last_file_path, &new_file_name).await.context("Failed to rename file")?;
+            //tokio::fs::remove_file(last_file_path).await.context("Failed to remove old file")?;
+            return Ok(new_file_name);
         } else {
             warn!("No files found in the directory.");
+            anyhow::bail!("No files found in the directory")
         }
     }
-
+    anyhow::bail!("No files found in the directory")
     //return the path to the file,for sending the email for the cliente
-    Ok(last_modified_file.unwrap().0)
 }
 
 async fn input_cliente(client: &Client,cpf_cnpj: &str) -> Result<(),anyhow::Error> {    
@@ -441,105 +447,116 @@ async fn input_cliente(client: &Client,cpf_cnpj: &str) -> Result<(),anyhow::Erro
     Ok(())
 }
 
-async fn dados_nfs(cliente:&ClienteNf,client: &Client,value:f32) -> Result<(),anyhow::Error> {
+async fn dados_nfs(cliente: &ClienteNf, client: &Client, value: f32) -> Result<(), anyhow::Error> {
+    sleep(Duration::from_secs(1)).await;
     // Locate and set "Razão Social" if empty
     client.wait().for_element(Locator::Css("#vCTBRAZSOC")).await.context("failed to find Razão Social input element")?;
+
     let razao_social_element = client.find(Locator::Css("#vCTBRAZSOC")).await.context("failed to find Razão Social input element")?;
     let current_value = razao_social_element.prop("value").await.context("failed to get value of Razão Social input element")?;
-    if current_value.is_none() {
+    if current_value.is_none() || current_value.unwrap().is_empty() {
         razao_social_element.send_keys(&cliente.nome).await.context("failed to input Razão Social value")?;
     }
 
+    sleep(Duration::from_secs(1)).await;
     // Locate and set "Nome Logradouro"
-    //client.wait().for_element(Locator::Css("#vNOMLOG")).await.context("failed to find nome logradouro input element")?;
+    client.wait().for_element(Locator::Css("#vNOMLOG")).await.context("failed to find nome logradouro input element")?;
+
     let nome_logradouro_element = client.find(Locator::Css("#vNOMLOG")).await.context("failed to find nome logradouro input element")?;
     let current_value = nome_logradouro_element.prop("value").await.context("failed to get value of nome logradouro input element")?;
-    if current_value.is_none() {
+    if current_value.is_none() || current_value.unwrap().is_empty() {
         nome_logradouro_element.send_keys(&cliente.rua).await.context("failed to input value in nome logradouro")?;
     }
 
-       // Locate and set "Número" if it exists and is empty
+    sleep(Duration::from_secs(1)).await;
+    // Locate and set "Número" if it exists and is empty
     if let Some(numero) = &cliente.numero {
-        //client.wait().for_element(Locator::Css("#vCTBENDNUMERO")).await.context("failed to find endereco numero input element
         let numero_element = client.find(Locator::Css("#vCTBENDNUMERO")).await.context("failed to find endereco numero input element")?;
         let current_value = numero_element.prop("value").await.context("failed to get value of endereco numero input element")?;
-        if current_value.is_none() {
+        if current_value.is_none() || current_value.unwrap().is_empty() {
             numero_element.send_keys(numero).await.context("failed to input value in endereco numero")?;
         }
     }
 
+    sleep(Duration::from_secs(1)).await;
     // Locate and set "Complemento" if it exists and is empty
     if let Some(complemento) = &cliente.complemento {
-        //client.wait().for_element(Locator::Css("#vCTBCOMPLE")).await.context("failed to find complemento input element")?;
         let complemento_element = client.find(Locator::Css("#vCTBCOMPLE")).await.context("failed to find complemento input element")?;
         let current_value = complemento_element.prop("value").await.context("failed to get value of complemento input element")?;
-        if current_value.is_none() {
+        if current_value.is_none() || current_value.unwrap().is_empty() {
             complemento_element.send_keys(complemento).await.context("failed to input value in complemento")?;
         }
     }
 
+    sleep(Duration::from_secs(1)).await;
     // Locate and set "CEP"
-    //client.wait().for_element(Locator::Css("#vCTBCEP")).await.context("failed to find cep input element")?;
-    let cep_element = client.find(Locator::Css("#vCTBCEP")).await.context("failed to find cep input element")?;
+    let cep_element = client.find(fantoccini::Locator::Css("#vCTBCEP")).await.context("failed to find cep input element")?;
     let current_value = cep_element.prop("value").await.context("failed to get value of cep input element")?;
-    if current_value.is_none() {
+    if current_value.is_none() || current_value.unwrap().is_empty() {
         cep_element.send_keys(&cliente.cep).await.context("failed to input value in cep")?;
     }
 
+    sleep(Duration::from_secs(1)).await;
     // Locate and set "ID do Município"
-    //client.wait().for_element(Locator::Css("#vMUNID")).await.context("failed to find municipio input element")?;
-    let municipio_element = client.find(Locator::Css("#vMUNID")).await.context("failed to find municipio input element")?;
-    let current_value = municipio_element.prop("value").await.context("failed to get value of municipio input element")?;
-    if current_value.is_none() {
-        municipio_element.send_keys(ID_MUNICIPIO).await.context("failed to input value in municipio")?;
-    }
+    client.find(fantoccini::Locator::Css("#vMUNID")).await.context("failed to find municipio input element")?
+        .send_keys(ID_MUNICIPIO).await.context("failed to input value in municipio")?;
 
-    // Locate and set "Email" (without checking for existing value)
-    //client.wait().for_element(Locator::Css("#vCTBEMAIL")).await.context("failed to find email input element")?;
-    client.find(Locator::Css("#vCTBEMAIL")).await.context("failed to find email input element")?
-        .send_keys(&cliente.email).await.context("failed to input value in email field")?;
-
+    sleep(Duration::from_secs(1)).await;
     // Locate and set "Código do Serviço"
-    //client.wait().for_element(Locator::Css("#vSRVSIGLA")).await.context("failed to find sigla input element")?;
-    let servico_element = client.find(Locator::Css("#vSRVSIGLA")).await.context("failed to find sigla input element")?;
-    let current_value = servico_element.prop("value").await.context("failed to get value of sigla input element")?;
-    if current_value.is_none() {
-        servico_element.send_keys(ID_SERVICO).await.context("failed to input value in sigla")?;
-    }
+    client.find(Locator::Css("#vSRVSIGLA"))
+        .await.context("failed to find sigla input element")?
+        .send_keys(ID_SERVICO)
+        .await.context("failed to input value in sigla")?;
 
-    // Locate and set "Valor do Serviço"
-    //client.wait().for_element(Locator::Css("#vNFIVLRSRV")).await.context("failed to find valor servico input element")?;
-    let valor_servico_element = client.find(Locator::Css("#vNFIVLRSRV")).await.context("failed to find valor servico input element")?;
-    let current_value = valor_servico_element.prop("value").await.context("failed to get value of valor servico input element")?;
-    if current_value.is_none() {
-        valor_servico_element.send_keys(&value.to_string()).await.context("failed to input value in valor servico")?;
-    }
+    sleep(Duration::from_secs(1)).await;
+    // Locate and clear "Valor do Serviço"
+    client.find(Locator::Css("#vNFIVLRSRV"))
+        .await.context("failed to find valor servico input element")?
+        .clear().await.context("failed to clear valor servico input element")?;
 
+    sleep(Duration::from_secs(1)).await;
+    client.find(Locator::Css("#vNFIVLRSRV"))
+        .await.context("failed to find valor servico input element")?
+        .send_keys(&value.to_string().replace(".", ","))
+        .await.context("failed to input value in valor servico")?;
+
+    sleep(Duration::from_secs(1)).await;
     // Locate and click the "Add Service" button
-    client.wait().for_element(Locator::Css("#vIMGADDSRV")).await.context("failed to find add service button")?;
-    client.find(Locator::Css("#vIMGADDSRV")).await.context("failed to find add service button")?
-        .click().await.context("failed to click add service button")?;
+    client.wait().for_element(Locator::Css("#vVIMGADDSRV")).await.context("failed to find add service button")?;
+    client.execute("document.getElementById('vVIMGADDSRV').click();", vec![]).await.context("failed to click add service button using JavaScript")?;
 
+    sleep(Duration::from_secs(1)).await;
+
+    // Locate and set "Código CNAE", it's a select
+    client.wait().for_element(Locator::Css("#vCOMBOCNAE")).await.context("failed to find cnae input element")?;
+    client.find(Locator::Css("#vCOMBOCNAE option[value='3413']")).await.context("failed to find option element for CNAE code 3413")?
+        .click().await.context("failed to select CNAE code 3413")?;
+
+    sleep(Duration::from_secs(1)).await;
     // Locate and set "Código CNAE"
-    //client.wait().for_element(Locator::Css("#vNBSCODIGO")).await.context("failed to find codigo input element")?;
-    let codigo_element = client.find(Locator::Css("#vNBSCODIGO")).await.context("failed to find codigo input element")?;
-    let current_value = codigo_element.prop("value").await.context("failed to get value of codigo input element")?;
-        if current_value.is_none() {
-        codigo_element.send_keys(ID_CNAE).await.context("failed to input value in codigo")?;
-    }
+    client.find(Locator::Css("#vNBSCODIGO"))
+        .await.context("failed to find codigo input element")?
+        .send_keys(ID_CNAE)
+        .await.context("failed to input value in codigo")?;
 
+    sleep(Duration::from_secs(1)).await;
     // Locate and set "Descrição Geral do Serviço"
-    //client.wait().for_element(Locator::Css("#vNFSDSCGERAL")).await.context("failed to find descricao input element")?;
     let descricao_element = client.find(Locator::Css("#vNFSDSCGERAL")).await.context("failed to find descricao input element")?;
     let current_value = descricao_element.prop("value").await.context("failed to get value of descricao input element")?;
-    if current_value.is_none() {
+    if current_value.is_none() || current_value.unwrap().is_empty() {
         descricao_element.send_keys(DESCRICAO).await.context("failed to input value in descricao")?;
     }
 
+    sleep(Duration::from_secs(1)).await;
     // Locate and click the "Visualizar Nota Fiscal" button
     client.wait().for_element(Locator::Css("#BUTTON3")).await.context("failed to find button element")?;
     client.find(Locator::Css("#BUTTON3")).await.context("failed to find button element")?
         .click().await.context("failed to click button")?;
+
+    sleep(Duration::from_secs(30)).await;
+    client.wait().for_element(Locator::Css("#BTNGERAR")).await.context("failed to find voltar button")?;
+    client.find(Locator::Css("#BTNGERAR")).await.context("failed to find voltar button")?
+        .click().await.context("failed to click voltar button")?;
 
     Ok(())
 }
