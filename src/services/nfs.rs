@@ -490,7 +490,7 @@ async fn dados_nfs(cliente: &ClienteNf, client: &Client, value: f32) -> Result<(
 
     sleep(Duration::from_secs(1)).await;
     // Locate and set "CEP"
-    let cep_element = client.find(fantoccini::Locator::Css("#vCTBCEP")).await.context("failed to find cep input element")?;
+    let cep_element = client.find(Locator::Css("#vCTBCEP")).await.context("failed to find cep input element")?;
     let current_value = cep_element.prop("value").await.context("failed to get value of cep input element")?;
     if current_value.is_none() || current_value.unwrap().is_empty() {
         cep_element.send_keys(&cliente.cep).await.context("failed to input value in cep")?;
