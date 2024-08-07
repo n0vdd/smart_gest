@@ -1,26 +1,8 @@
-//TODO automatizar criacao de nota fiscal de servico
-//pelo site da prefeitura de nova lima
-//talvez tenha como enviar por xml(mais dificil)
-//? devo precisar de alguma crate para xml(tenho alguns docs sobre)
-//talvez precisa auatomatizar como se fosse uma pessoa(eles nao devem verificar bots, so nao posso derrubar o site)
-
-//enviar um email com a nota gerada apos pagamento
-
-
-const CNPJ: &str = "48530335000148";
-const PASSWORD: &str = "oU6jlxL7RpUY7JB3TAqD";
-const ID_MUNICIPIO: &str = "17428";
-const ID_SERVICO: &str= "103";
-const ID_CNAE: &str = "117019000";
-const DESCRICAO: &str = "Serviço de internet";
-
-
-
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context;
 use chrono::{Datelike,Local};
-use lettre::{AsyncSmtpTransport, Tokio1Executor};
+use lettre::{error, AsyncSmtpTransport, Tokio1Executor};
 use serde_json::json;
 use sqlx::{query, PgPool};
 use tokio::{fs::{read_dir, rename}, time::sleep};
@@ -29,11 +11,21 @@ use std::path::PathBuf;
 use fantoccini::{wd::Capabilities, Client, ClientBuilder, Locator};
 use tracing::{debug, error, info, warn};
 
-use crate::{models::client::ClienteNf, services::email::send_nf};
+use crate::{models::client::ClienteNf, services::email::{send_nf, setup_email}};
 
 use super::email::send_nf_lote;
 
-//TODO download the nf emitida e nao enviada
+//TODO this will have to be on the database
+//provedor data i think
+const CNPJ: &str = "48530335000148";
+const PASSWORD: &str = "oU6jlxL7RpUY7JB3TAqD";
+const ID_MUNICIPIO: &str = "17428";
+const ID_SERVICO: &str= "103";
+const ID_CNAE: &str = "117019000";
+const DESCRICAO: &str = "Serviço de internet";
+
+
+//TODO use this to send email to the clients i generated nota_fiscal
 //irei testar tanto o envio de email para o cliente
 // quanto o processo de fazer download do arquivo pelo botao imprimir
 pub async fn download_nf_nao_enviada(pool:&PgPool,mailer: AsyncSmtpTransport<Tokio1Executor>) -> Result<(),anyhow::Error> {
@@ -42,7 +34,6 @@ pub async fn download_nf_nao_enviada(pool:&PgPool,mailer: AsyncSmtpTransport<Tok
     let client = ClientBuilder::native().capabilities(caps)
     .connect("http://localhost:9515").await.context("Erro ao conectar ao WebDriver")?;
 
-    //TODO login to the system
     login(&client).await.context("Erro ao logar no sistema de nota fiscal")?;
 
     //wait for the login to complete
@@ -126,10 +117,6 @@ pub async fn cancela_nfs() -> Result<(),anyhow::Error> {
 
     //confirma clicando em BUTTON2
     
-    //TODO enviar e receber a nota fiscal cancelada
-    //salvar a mesma para o sistema de arquivos
-    //caminho: notas_fiscais/{cliente_nome}/{data}.pdf
-    //e salvar um o pagamento relacionado,o caminho e a data no banco de dados
     Ok(())
 }
 
@@ -196,7 +183,7 @@ pub async fn exporta_nfs(pool: &PgPool,mailer:&AsyncSmtpTransport<Tokio1Executor
     .click()
     .await.context("failed to click end date trigger")?;
 
-    //BUG working with the second calender there is a need to specify the div.calendar:last-of-type
+    //BUG working with the second calendar there is a need to specify the div.calendar:last-of-type
     //wait for the second calendar to open
     client.wait().for_element(Locator::Css("div.calendar:last-of-type td.calendarbutton.calendar-nav:nth-of-type(2)")).await.context("failed to find previous month button")?;
 
@@ -274,9 +261,8 @@ pub async fn exporta_nfs(pool: &PgPool,mailer:&AsyncSmtpTransport<Tokio1Executor
     }
 
     //Envia o lote de nota fiscal para a contabilidade
-    //TODO pegar a quantidade de notas fiscais do lote
-    send_nf_lote(pool, mailer, last_modified_file.unwrap().0,0)
-    .await.context("Erro ao enviar email com lote de nota fiscal")?;
+    send_nf_lote(pool, mailer, last_modified_file.unwrap().0)
+        .await.context("Erro ao enviar email com lote de nota fiscal")?;
 
     Ok(())
 }
@@ -297,9 +283,9 @@ async fn setup_gera_nf_chromedriver(nome: &str) -> Capabilities {
 
     // Create the chrome options map
     let mut chrome_options = serde_json::Map::new();
-    chrome_options.insert("args".to_string(), json!(["--kiosk-printing"]));
-    //TODO make it headless and etc
-    //chrome_options.insert("args".to_string(), json!(["--headless=new,--disable-gpu,--no-sandbox,--disable-dev-shm-usage,--kiosk-printing"]));
+    //This one is for tests
+    //chrome_options.insert("args".to_string(), json!(["--kiosk-printing"]));
+    chrome_options.insert("args".to_string(), json!(["--headless=new,--disable-gpu,--no-sandbox,--disable-dev-shm-usage,--kiosk-printing"]));
     chrome_options.insert("prefs".to_string(), json!(prefs));
 
     // Create the capabilities map
@@ -353,6 +339,15 @@ pub async fn gera_nfs(pool:&PgPool,cliente:&ClienteNf,value:f32,mailer: Option<A
 
         query!("INSERT INTO nfs (path, payment_received_id, sent) VALUES ($1, $2, $3)", nf.as_str(), payment_id, sent)
             .execute(pool).await.context("Erro ao salvar nota fiscal no banco de dados")?;
+    } else {
+        error!("No smtp connection found, trying to set it up");
+        //tenta conectar com o smtp e refazer o processo
+        let mailer = setup_email(&pool).await.context("Erro ao configurar email")?;
+        let sent = send_nf(&pool, &mailer, &cliente.email, nf.clone())
+            .await.context("Erro ao enviar email com nota fiscal")?;
+
+        query!("INSERT INTO nfs (path, payment_received_id, sent) VALUES ($1, $2, $3)", nf.as_str(), payment_id, sent)
+            .execute(pool).await.context("Erro ao salvar nota fiscal no banco de dados")?;
     }
     Ok(())
 }
@@ -360,7 +355,6 @@ pub async fn gera_nfs(pool:&PgPool,cliente:&ClienteNf,value:f32,mailer: Option<A
 //the chromedriver will save to nota_fiscal/{cliente_nome} already
 //will need to get the last modified file and rename it to the date
 async fn salvar_nota_fiscal(client:&Client,nome:&str) -> Result<String,anyhow::Error> {
-    //BUG maybe this doesnt match id
     client.wait().for_element(Locator::Css("#BTNIMPRIMIR")).await.context("failed to find imprimir button")?;
     sleep(Duration::from_secs(5)).await;
 
@@ -368,6 +362,7 @@ async fn salvar_nota_fiscal(client:&Client,nome:&str) -> Result<String,anyhow::E
     .click()
     .await.context("failed to click imprimir button")?;
 
+    //wait for the downnload
     sleep(Duration::from_secs(10)).await;
 
     //caminho: notas_fiscais/{cliente_nome}/{data}.pdf

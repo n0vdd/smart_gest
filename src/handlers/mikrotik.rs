@@ -63,7 +63,6 @@ pub async fn failover_radius_script(Path(mikrotik_id):Path<i32>,Extension(pool):
         }).expect("Failed to fetch Planos");
 
     //Get all the clientes for the given mikrotik
-    //TODO The correct thing would be to have a cliente function that gets the clientes for a mikrotik id
     let clientes = query_as!(Cliente,"SELECT * FROM clientes WHERE mikrotik_id = $1",mikrotik_id)
         .fetch_all(&*pool)
         .await.map_err(|e| -> _ {

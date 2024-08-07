@@ -20,6 +20,7 @@ const DATABASE_URL: &str = "postgres://radius:radpass@localhost:5434/radius";
 //After adding the mikrotik to the nas table, the freeradius is restarted
 ///!there is a need to create a entry on sudoers.d/(user running the server) file so that restarting freeradius doesnt needs a password
 /// %user ALL= NOPASSWD: /bin/systemctl restart freeradius 
+/// TODO radaius should use the table nas to authenticate the mikrotik,not clients.conf
 pub async fn create_mikrotik_radius(
     mikrotik: MikrotikNas,
 ) -> Result<(), anyhow::Error> {
@@ -89,8 +90,6 @@ pub struct ClienteNas {
     pub plano_nome: String
 }
 
-//?idk why the use cleartext-password everywhere(dont like it),(maybe there is a way to save password as a hash?)
-//TODO how could i get rid of all the cleartext passwords? they are all one time generated and shit, but dont like it
 //gets the login,password and plano name from the cliente
 //add the cliente name and pass as a radius user
 //add the cliente to the group of its plano(already with bandiwth limitation and shit)
@@ -105,8 +104,8 @@ pub async fn add_cliente_radius(cliente:ClienteNas) -> Result<(), anyhow::Error>
         anyhow!("Failed to select user from radcheck radius table".to_string())
     })?;            
 
+    //retorna um erro caso o cliente existe
     if opt_cliente.is_some() {
-        //TODO maybe this should not be a error warning
         warn!("Cliente ja existe na base de dados do radius");
         return Err(anyhow!("Cliente ja existe na base de dados do radius {:?}",cliente));
     }
@@ -172,7 +171,6 @@ pub async fn create_radius_cliente_pool() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-//TODO olhar se deletar o cliente seria viavel(parece bem mais trabalhoso, mas nao sei)
 //Cria a pool utilizada pelo plano bloqueado
 //Cria o plano BLOQUEADO(plano com 1k de velocidade), tornando impossivel a utilizacao do servico
 //Esse plano permite bloquear o cliente simplesmente trocando o cliente do seu plano padrao para o plano bloqueado
@@ -318,8 +316,7 @@ pub struct PlanoRadiusDto {
 //Creates the plano on the radius server, its all linked by its name, uses the valid ip pool
 //the one created by: fn create_radius_cliente_pool()
 pub async fn create_radius_plano(plano:PlanoRadiusDto) -> Result<(), anyhow::Error> {
-    //This solves it
-    //BUG this code would be run from another env maybe?
+
     //Maybe it is not so performatic, needs to keep recreating connections
     //TODO maybe there is a way to use a pool, i dont think there is
     let mut pool = PgConnection::connect(DATABASE_URL).await
@@ -373,6 +370,7 @@ pub async fn create_radius_plano(plano:PlanoRadiusDto) -> Result<(), anyhow::Err
     })?;
 
     //TODO add the mikrotik ip as the dns server
+    //should be optional, idk
 
     Ok(())
 }

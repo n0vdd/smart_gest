@@ -113,8 +113,6 @@ pub async fn add_contrato_template(Extension(pool):Extension<Arc<PgPool>>,
 //Adiciona as templates usadas para gerar os contratos ao banco de dados
 //Apenas caso as mesmas ainda nao existam no banco
 //Sao valores hard_coded
-//TODO talvez possa fazer isso pelo sistema, mas acho que ficaria mais trabalhoso no momento
-//TODO criar templates pelo sistema vai envolver criar templates do askama e coisas do tipo
 //nao sei o quanto seria viavel, mas seria necessario, talvez consigar criar trais e afins, sla
 /* 
 pub async fn add_template(pool: &PgPool) -> Result<(),anyhow::Error>{
@@ -219,18 +217,11 @@ pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(clien
     let year = Local::now().year();
     let data = format!("{}/{}/{}",day,month,year);
 
-    //TODO There should be a better way to do this
-    //Compara o nome da template para saber qual contrato sera gerado
-    //Tenho que retornar uma tuple com 2 contratos devido a template fibra+voip(usa 2 contratos)
-    let tera= Tera::new("/templates/contratos/*").map_err(|e| {
-        error!("Failed to compile contrato templates: {:?}", e);
-        anyhow::anyhow!("Failed to compile contrato templates")
-    }).expect("Failed to compile contrato templates");
     let mut context = Context::new();
     context.insert("cliente", &client);
     context.insert("date", &data);
 
-    let template = tera.render(&client.contrato_template_path, &context).map_err(|e| {
+    let template = TEMPLATES.render(&client.contrato_template_path, &context).map_err(|e| {
         error!("Failed to render contrato template: {:?}", e);
         anyhow::anyhow!("Failed to render contrato template")
     }).expect("Failed to render contrato template");

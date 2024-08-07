@@ -1,11 +1,13 @@
+use anyhow::Context;
 use axum::{extract::{Path, State}, response::{Html, IntoResponse, Redirect}, Extension};
+use chrono::{Datelike, Utc};
 use radius::{bloqueia_cliente_radius, add_cliente_radius, ClienteNas};
-use time::{macros::format_description, PrimitiveDateTime};
+use time::{macros::format_description, Date, Duration, Month, PrimitiveDateTime};
 use tracing::{debug, error};
 use axum_extra::extract::Form;
 use cnpj::Cnpj;
 use cpf::Cpf;
-use std::sync::Arc;
+use std::sync::Arc ;
 use sqlx::{query, query_as, PgPool};
 
 
@@ -254,6 +256,7 @@ pub async fn register_cliente(
         TipoPessoa::PessoaJuridica => {
             //Check the cnpj(it looks kinda of buggy)
             //TODO make better checks for this shit
+            //BUG this looks kinda of buggy
             //?maybe i could unit test?idk
             if cnpj::valid(&client.cpf_cnpj) {
                 client.formatted_cpf_cnpj = client
@@ -384,6 +387,15 @@ pub async fn fetch_tipo_clientes_before_date_for_dici(
     Ok(tipos)
 }
 
+//TODO importar clientes do mkauth
+//posso pegar o codigo do contractor,realizar auth,pegar clientes e adaptar para o meu formato de cliente
+//adicionar para o asaas como opcao, seguir o gerar dici e nota fiscal setado pelo mkauth(criar radius com certeza)
+//terei que ter uma segunda opcao em cliente
+
+
+//TODO entender melhor como sao as datas de cobranca do asaas
+//?a cobranca do cartao confirma no dia do pagamento?
+//?a cobranca do boleto a pessoa consegue pagar a partir do momento que ele e gerada?quando ela e gerada?
 pub async fn bloqueia_clientes_atrasados(pool: &PgPool) -> Result<(),anyhow::Error>{
     let clientes = get_all_clientes(&*pool).await.map_err(|e| {
         error!("Failed to fetch clientes: {:?}", e);
@@ -393,10 +405,21 @@ pub async fn bloqueia_clientes_atrasados(pool: &PgPool) -> Result<(),anyhow::Err
     for cliente in clientes {
         //Format chrono to primitiveDateTive
         let format = format_description!("[day]_[month]_[year]_[hour]:[minute]:[second].[subsecond]");
-        let date = PrimitiveDateTime::parse(chrono::Utc::now().to_string().as_str(), format).expect("Erro ao formatar data");
 
-        //BUG maybe the way i am cheking the date is not the best
-        let payment = query!("SELECT * FROM payment_confirmed where cliente_id = $1 and created_at >= $2 and created_at <= $3",cliente.id,date,date)
+        let prev_date = PrimitiveDateTime::parse(chrono::Utc::now().to_string().as_str(), format)?; 
+        let prev_month = Utc::now().month() - 1;
+        //Voltei um mes, ainda no dia 12
+        let prev_date = prev_date.replace_month(Month::try_from(prev_month as u8)?)?;
+        //fui para o dia 25
+        //dia 25 mes passado
+        let prev_date = prev_date.checked_add(Duration::days(13)).unwrap();
+
+        //dia 12 do mes atual
+        let date = PrimitiveDateTime::parse(chrono::Utc::now().to_string().as_str(), format)?;
+        //TODO conferir a partir de quando o cliente conseguiria pagar o boleto/cartao para deixar uma data mais exata
+        //caso o cliente nao tenha um pagamento confirmado do dia 25 do mes passado ate hoje
+        //bloqueia o cliente no radius
+        let payment = query!("SELECT * FROM payment_confirmed where cliente_id = $1 and created_at >= $2 and created_at <= $3",cliente.id,prev_date,date)
             .fetch_optional(&*pool).await.map_err(|e| {
                 error!("Failed to fetch payment_confirmed: {:?}", e);
                 anyhow::anyhow!("Failed to fetch all payment_confirmed")
