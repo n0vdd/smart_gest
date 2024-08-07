@@ -68,7 +68,6 @@ pub async fn lookup_cep(
         let mut context = tera::Context::new();
         context.insert("endereco", &endereco);
 
-        //TODO alterar o endereco snippet para usar endereco.cep etc
         let template = TEMPLATES.render("snippets/endereco_snippet.html", &context).map_err(|e| -> _ {
             error!("Failed to render endereco snippet: {:?}", e);
             return Html("Falha ao renderizar endereco snippet".to_string())

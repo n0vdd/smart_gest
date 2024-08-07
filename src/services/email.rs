@@ -50,10 +50,17 @@ pub async fn send_nf(pool:&PgPool, mailer: &AsyncSmtpTransport<Tokio1Executor>, 
     let ano_atual = Local::now().year();
 
     //Como a cobranca ocorre dia 5, contamos de dia 5 a dia 5
-    let inicio = format!("05/{}/{}",mes_atual-1,ano_atual);
-    let fim = format!("05/{}/{}",mes_atual ,ano_atual);
-    //TODO cobramos do mes anterior ou do mes atual?
-    //Sendo feito como se a nota fiscal emitida em novembro fosse referente ao servico de outubro a novembro
+    let inicio = format!("05/{}/{}",mes_atual,ano_atual);
+
+    //BUG This will always be assigned month goes from 1 to 12 and i cover all the cases 
+    let mut fim = String::new();
+    if mes_atual == 12 {
+        fim = format!("05/01/{}",ano_atual+1);
+    } else {
+        fim = format!("05/{}/{}",mes_atual+1 ,ano_atual);
+    }
+    //cobramos do mes atual
+    //Sendo feito como se a nota fiscal emitida em novembro fosse referente ao servico de novembro a dezembro
     let periodo = format!("{} - {}", inicio, fim);
     let mut context = tera::Context::new();
     context.insert("data",&data );
@@ -81,7 +88,7 @@ pub async fn send_nf(pool:&PgPool, mailer: &AsyncSmtpTransport<Tokio1Executor>, 
 }
 
 //TODO talves devesse ser enviado dia 5, fechar e comecar tudo de um dia 5 ao outro
-pub async fn send_nf_lote(pool: &PgPool,mailer: &AsyncSmtpTransport<Tokio1Executor>,lote:PathBuf,qnt_nfs:i32) -> Result<(),anyhow::Error> {
+pub async fn send_nf_lote(pool: &PgPool,mailer: &AsyncSmtpTransport<Tokio1Executor>,lote:PathBuf) -> Result<(),anyhow::Error> {
     let emails = query_as!(NfConfig,"SELECT * FROM nf_config").fetch_one(pool).await
         .context("Erro ao buscar os emails da contabilidade")?;
 
@@ -98,29 +105,29 @@ pub async fn send_nf_lote(pool: &PgPool,mailer: &AsyncSmtpTransport<Tokio1Execut
     let nome_provedor = query!("SELECT nome FROM provedor").fetch_one(pool).await
         .context("Erro ao buscar o nome do provedor")?.nome;
 
-    let mut ano = Local::now().year();
-    let mut mes = Local::now().month();
-
-    //BUG caso fosse o mes de janeiro, o mes anterior seria dezembro do ano passado
-    //logo teria que voltar o ano tambem
-    if mes == 1 {
-        ano = ano - 1;
-        mes = 12;
-    //caso contrato estamos nos referindo ao mes anterior pois enviamos o lote apos a virada do mes de referencia do mesmo
-    } else {
-        mes = mes - 1;
-    }
+    let ano = Local::now().year();
+    let mut next_ano = ano;
+    let mes = Local::now().month();
 
     let subject = format!("Lote de Notas Fiscais - {}/{}",mes,ano);
-    //BUG no caso da virada de ano tenho que atualizar o ano na seguna parte do periodo
-    let periodo = format!("05/{}/{} - 05/{}/{}",mes,ano,mes+1,ano);
+
+    let mut next_mes = mes;
+    if mes == 12 {
+        //BUG caso fosse o mes de dezembro, o mes seguinte seria janeiro do ano que vem
+        //logo teria que avancar o ano e voltar o mes 
+        next_mes = 1;
+        next_ano += 1;
+    } else {
+        next_mes += 1;
+    }
+
+    let periodo = format!("05/{}/{} - 05/{}/{}",mes,ano,next_mes,next_ano);
 
     let mut context = tera::Context::new();
     context.insert("nome",&nome_provedor);
     context.insert("mes", &mes);
     context.insert("ano", &ano);
-    //TODO pegar essa informacao da pagina apos processar o lote
-    context.insert("quantidade_notas", &qnt_nfs);
+    //context.insert("quantidade_notas", &qnt_nfs);
     context.insert("periodo", &periodo);
 
 

@@ -15,6 +15,8 @@ use crate::{handlers::clients::fetch_tipo_clientes_before_date_for_dici, models:
 //TODO get this from the provedor table
 const CNPJ:&str = "48530335000148"; // Hardcoded CNPJ
 //this data should be obrigatory for the provedor to generate nota fiscal
+//TODO get this from the provedor table
+//?should be on provedor or dici config?provedor for simplicity
 //TODO do a check if this data exists before generating the DICI
 //if not returns a error
 const COD_IBGE:&str = "3106200"; // Hardcoded COD_IBGE

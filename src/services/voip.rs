@@ -2,7 +2,6 @@ use anyhow::Context;
 use tracing::{error, warn};
 
 
-//TODO this could all be done with reqwest i think
 pub async fn checa_voip_down(client: &reqwest::Client) -> Result<(),anyhow::Error>{
     //Check all the devices
     let res = client.get("http://172.27.27.37:7557/devices?projection=InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.1.Enable,InternetGatewayDevice.Services.VoiceService.1.VoiceProfile.1.Line.1.Status,_id")
@@ -10,7 +9,6 @@ pub async fn checa_voip_down(client: &reqwest::Client) -> Result<(),anyhow::Erro
         .text().await.context("Failed to get routers text")?;
     let routers: serde_json::Value = serde_json::from_str(&res).context("Failed to parse routers JSON")?;
     let routers = routers.as_array().context("Expected an array of routers")?;
-    //TODO loop for each router, checking if the line is enabled and if the status is not registered
     //Reboot the router
     for router in routers {
         if let Some(router_id) = router.get("_id").and_then(serde_json::Value::as_str) {

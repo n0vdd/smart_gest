@@ -38,7 +38,6 @@ pub async fn save_provedor(Extension(pool):Extension<Arc<PgPool>>,Form(provedor)
     Redirect::to("/config/provedor")
 }
 
-//TODO use htmx to send put and update provedor
 pub async fn update_provedor(Extension(pool):Extension<Arc<PgPool>>,Form(provedor):Form<Provedor>) 
     -> impl IntoResponse {
     query!("UPDATE provedor SET nome = $1, cnpj = $2, cep = $3, rua = $4, numero = $5, bairro = $6, cidade = $7, estado = $8, complemento = $9, telefone = $10, email = $11, observacao = $12 WHERE id = $13",
@@ -48,6 +47,14 @@ pub async fn update_provedor(Extension(pool):Extension<Arc<PgPool>>,Form(provedo
 
     Redirect::to("/config/provedor")
 }
+
+
+//TODO create assas config
+//if its using sandbox or production
+//the api key for production and sandbox
+//?maybe the way to configure the webhook aswell
+
+
 
 pub async fn show_nf_config(Extension(pool):Extension<Arc<PgPool>>) -> impl IntoResponse {
     let nf_config = query_as!(NfConfig,"SELECT * FROM nf_config").fetch_optional(&*pool).await
@@ -74,7 +81,6 @@ pub async fn show_nf_config(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
 pub async fn save_nf_config(Extension(pool):Extension<Arc<PgPool>>,Form(nf_config):Form<NfConfigDto>) 
     -> impl IntoResponse {
 
-    //BUG check what this will do
     query!("INSERT INTO nf_config (contabilidade_email) VALUES ($1)",&nf_config.contabilidade_email)
         .fetch_one(&*pool).await
         .map_err(|e| {
@@ -86,7 +92,6 @@ pub async fn save_nf_config(Extension(pool):Extension<Arc<PgPool>>,Form(nf_confi
     Redirect::to("/config/nf")
 }
 
-//TODO use htmx to send put and update nf_config
 pub async fn update_nf_config(Extension(pool):Extension<Arc<PgPool>>,Form(nf_config):Form<NfConfig>)
     -> impl IntoResponse {
 
@@ -101,7 +106,6 @@ pub async fn update_nf_config(Extension(pool):Extension<Arc<PgPool>>,Form(nf_con
     Redirect::to("/config/nf")
 }
 
-//BUG maybe the error is here
 pub async fn show_email_config(Extension(pool):Extension<Arc<PgPool>>) -> impl IntoResponse {
     let email_config = query_as!(EmailConfig,"SELECT * FROM email_config").fetch_optional(&*pool).await
         .expect("Failed to fetch email_config");
@@ -136,6 +140,7 @@ pub async fn save_email_config(Extension(pool):Extension<Arc<PgPool>>,State(mut 
 }
 
 //TODO use htmx to send put and update email_config
+//BUG need to check if this is done
 pub async fn update_email_config(Extension(pool):Extension<Arc<PgPool>>,State(mut state):State<AppState>
     ,Form(email_config):Form<EmailConfig>) -> impl IntoResponse {
     query!("UPDATE email_config SET email = $1, password = $2, host = $3 WHERE id = $4",email_config.email,email_config.password,email_config.host,email_config.id)
