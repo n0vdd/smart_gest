@@ -10,7 +10,7 @@ use tracing::error;
 
 use crate::TEMPLATES;
 
-use super::{contrato::{find_all_contrato_templates, find_cliente_contract_data, find_contrato_template_by_id, save_contrato, save_contrato_template}, contrato_model::{ContratoDto, ContratoTemplateDto}};
+use super::{contrato::{find_all_contrato_templates, find_cliente_contract_data, find_contrato_template_by_id, save_contrato, save_contrato_template, update_contrato_template_in_db}, contrato_model::{ContratoDto, ContratoTemplate, ContratoTemplateDto, ContratoTemplateEditDto}};
 
 pub async fn show_contrato_template_list(Extension(pool): Extension<Arc<PgPool>>) -> impl IntoResponse {
     let templates = find_all_contrato_templates(&pool).await.map_err(|e| 
@@ -20,7 +20,8 @@ pub async fn show_contrato_template_list(Extension(pool): Extension<Arc<PgPool>>
     let mut context = Context::new();
     context.insert("templates", &templates);
 
-    match TEMPLATES.render("contrato_template/contrato_template_list.html", &context) {
+    let template = TEMPLATES.lock().await;
+    match template.render("contrato_template/contrato_template_list.html", &context) {
         Ok(template) => Html(template).into_response(),
         Err(e) => {
             error!("Failed to render contrato template list template: {:?}", e);
@@ -32,7 +33,8 @@ pub async fn show_contrato_template_list(Extension(pool): Extension<Arc<PgPool>>
 //in the bottom of the form it should show what data can be used on the template like 
 //{{ date }} {{ cliente.nome }} etc,etc
 pub async fn show_contrato_template_add_form() -> impl IntoResponse {
-    match TEMPLATES.render("contrato/contrato_template_add_form.html", &Context::new()) {
+    let template = TEMPLATES.lock().await;
+    match template.render("contrato_template/contrato_template_add_form.html", &Context::new()) {
         Ok(template) => Html(template).into_response(),
 
         Err(e) => {
@@ -62,7 +64,8 @@ pub async fn show_contrato_template_edit_form(Extension(pool):Extension<Arc<PgPo
     context.insert("data", &data);
     context.insert("template", &template);
 
-    match TEMPLATES.render("contrato/contrato_template_edit.html",&context) {
+    let template = TEMPLATES.lock().await;
+    match template.render("contrato_template/contrato_template_edit.html",&context) {
         Ok(template) => Html(template).into_response(),
 
         Err(e) => {
@@ -94,7 +97,7 @@ pub async fn add_contrato_template(Extension(pool):Extension<Arc<PgPool>>,
 
     //After adding a new template we need to reload the templates
     //So that we can latter render it
-    let mut templates = TEMPLATES.clone();
+    let mut templates = TEMPLATES.lock().await;
 
     templates.full_reload().map_err(|e| {
         error!("Failed to reload templates: {:?}", e);
@@ -104,6 +107,31 @@ pub async fn add_contrato_template(Extension(pool):Extension<Arc<PgPool>>,
     Redirect::to("/financeiro/contrato_template")
 }
 
+pub async fn update_contrato_template(Extension(pool): Extension<Arc<PgPool>>,
+    Form(contrato): Form<ContratoTemplateEditDto>) -> impl IntoResponse {
+
+    let path = format!("templates/contratos/{}.html", contrato.nome);
+
+    update_contrato_template_in_db(&pool, &contrato,&path).await.map_err(|e|
+        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,e.to_string())
+    ).expect("Erro ao atualizar template de contrato no banco de dados");
+
+    File::create(&path).await.map_err(|e| {
+        error!("Failed to create template file: {:?}", e);
+        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,"Failed to create template file".to_string())
+    }).expect("Failed to create template file")
+    .write_all(contrato.data.as_bytes()).await.map_err(|e| {
+        error!("Failed to write template data to file: {:?}", e);
+        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,"Failed to write template data to file".to_string())
+    }).expect("Failed to write template data to file");
+
+    //After adding a new template we need to reload the templates
+    //So that we can latter render it
+    let mut templates = TEMPLATES.lock().await;
+    templates.full_reload().expect("Failed to reload templates");
+
+    Redirect::to("/financeiro/contrato_template")
+}
 //Adiciona as templates usadas para gerar os contratos ao banco de dados
 //Apenas caso as mesmas ainda nao existam no banco
 //Sao valores hard_coded
@@ -184,7 +212,8 @@ pub async fn generate_contrato(Extension(pool):Extension<Arc<PgPool>>,Path(clien
     context.insert("date", &data);
 
     //TODO deal with error on html
-    let template = TEMPLATES.render(&cliente.contrato_template_path, &context).map_err(|e| {
+    let template= TEMPLATES.lock().await;
+    let template = template.render(&cliente.contrato_template_path, &context).map_err(|e| {
         error!("Failed to render contrato template: {:?}", e);
         return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,"Failed to render contrato template")
     }).expect("Failed to render contrato template");

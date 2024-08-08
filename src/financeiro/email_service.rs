@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use chrono::{Datelike, Local};
-use lettre::{message::{header, Attachment, MultiPart, SinglePart}, transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
+use lettre::{message::{header, Attachment, Mailboxes, MultiPart, SinglePart}, transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 use sqlx:: PgPool;
 use tokio::{fs::File, io::AsyncReadExt};
 use tracing::info;
@@ -15,8 +15,9 @@ use crate::{config::config::{find_email_config, get_email_used_in_config, get_nf
 //or maybe all function that send mail will instantiate the email
 //this would not be optimal for sending 150 nfs one after another
 pub async fn setup_email(pool: &PgPool) -> Result<AsyncSmtpTransport<Tokio1Executor>,anyhow::Error> {
-    let mail_config = find_email_config(pool).await.context("Erro ao buscar a configuração de email")?.expect("Email config not found");
+    let mail_config = find_email_config(pool).await.context("Erro ao buscar a configuração de email")?;
 
+    if let Some(mail_config) = mail_config {
     let creds = Credentials::new(mail_config.email, mail_config.password);
 
     //Use ssl by default, so the server should support it
@@ -29,6 +30,9 @@ pub async fn setup_email(pool: &PgPool) -> Result<AsyncSmtpTransport<Tokio1Execu
     mailer.test_connection().await.context("Erro ao testar conexão com o email")?;
 
     Ok(mailer)
+    } else {
+        Err(anyhow::anyhow!("Configuração de email não encontrada"))
+    }
 }
 
 pub async fn send_nf(pool:&PgPool, mailer: &AsyncSmtpTransport<Tokio1Executor>, to: &str, nf:String) -> Result<bool,anyhow::Error> {
@@ -65,7 +69,8 @@ pub async fn send_nf(pool:&PgPool, mailer: &AsyncSmtpTransport<Tokio1Executor>, 
     context.insert("periodo", &periodo);
     context.insert("nome_provedor",&nome_provedor);
 
-    let body = TEMPLATES.render("nf_email.html", &context).context("Erro ao renderizar corpo do email")?;
+    let template = TEMPLATES.lock().await;
+    let body = template.render("nf_email.html", &context).context("Erro ao renderizar corpo do email")?;
     let email = Message::builder()
         .from(from_mail.parse().expect("Failed to parse sender email"))
         .to(to.parse().expect("Failed to parse cliente email"))
@@ -127,7 +132,8 @@ pub async fn send_nf_lote(pool: &PgPool,mailer: &AsyncSmtpTransport<Tokio1Execut
     context.insert("periodo", &periodo);
 
 
-    let body = TEMPLATES.render("nf_lote_email.html", &context).context("Erro ao renderizar corpo do email")?;
+    let template = TEMPLATES.lock().await;
+    let body = template.render("nf_lote_email.html", &context).context("Erro ao renderizar corpo do email")?;
     let email = Message::builder()
         .from(from_mail.parse().context("Failed to parse sender email")?)
         .to(emails.join(",").parse().context("Failed to parse cliente email")?)

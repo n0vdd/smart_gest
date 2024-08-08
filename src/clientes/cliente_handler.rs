@@ -1,5 +1,6 @@
 use axum::{extract::{Path, State}, response::{Html, IntoResponse, Redirect}, Extension};
 use radius::{bloqueia_cliente_radius, add_cliente_radius, ClienteNas};
+use tera::Context;
 use tracing::error;
 use axum_extra::extract::Form;
 use cnpj::Cnpj;
@@ -9,7 +10,7 @@ use sqlx::PgPool;
 
 use crate::{integracoes::webhooks_service::add_cliente_to_asaas, provedor::mikrotik::find_all_mikrotiks, AppState, TEMPLATES};
 
-use super::{cliente::{delete_cliente_by_id, find_all_clientes, get_cliente_login_by_id, save_cliente, update_cliente_by_id}, cliente_model::{Cliente, ClienteDto, TipoPessoa}, plano::{find_all_planos, find_plano_by_id}};
+use super::{cliente::{delete_cliente_by_id, find_all_clientes, find_cliente_by_id, get_cliente_login_by_id, save_cliente, update_cliente_by_id}, cliente_model::{Cliente, ClienteDto, TipoPessoa}, plano::{find_all_planos, find_plano_by_id}};
 
 
 
@@ -40,7 +41,8 @@ pub async fn show_cliente_list(
     let mut context = tera::Context::new();
     context.insert("clients", &clientes);
 
-    match TEMPLATES.render("cliente/cliente_list.html", &context) {
+    let template = TEMPLATES.lock().await;
+    match template.render("cliente/cliente_list.html", &context) {
         Ok(template) => Html(template).into_response(),
 
         Err(e) => {
@@ -51,56 +53,40 @@ pub async fn show_cliente_list(
     }
 }
 
-/* TODO deal with edit form later
 //lets look what the rest of the things we have to do
 //need to configure radius and the importante shit
 pub async fn show_cliente_edit_form(
     Path(id): Path<i32>,
     Extension(pool): Extension<Arc<PgPool>>,
-) -> Html<String> {
+) -> impl IntoResponse {
 
-    let client = query_as!(Cliente, "SELECT * FROM clientes WHERE id = $1", id)
-        .fetch_one(&*pool)
-        .await
-        .map_err(|e| -> _ {
-            error!("Failed to fetch client: {:?}", e);
-            Html("<p>Failed to fetch client</p>".to_string())
-        })
-        .expect("Failed to fetch client");
+    let cliente = find_cliente_by_id(&pool,id).await.map_err(|e| 
+        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,e.to_string())
+    ).expect("Erro ao achar cliente pela id");
 
-    let mikrotik_list = query_as!(Mikrotik, "SELECT * FROM mikrotik")
-        .fetch_all(&*pool)
-        .await
-        .map_err(|e| -> _ {
-            error!("Failed to fetch Mikrotik: {:?}", e);
-            Html("<p>Failed to fetch Mikrotik</p>".to_string())
-        })
-        .expect("Failed to fetch Mikrotik");
+    let mikrotik_list = find_all_mikrotiks(&pool).await.map_err(|e|
+        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    ).expect("Erro ao recuperar mikrotiks");
 
-    let plan_list = query_as!(Plano, "SELECT * FROM planos")
-        .fetch_all(&*pool)
-        .await
-        .map_err(|e| -> _ {
-            error!("Failed to fetch Planos: {:?}", e);
-            Html("<p>Failed to fetch Planos</p>".to_string())
-        })
-        .expect("Failed to fetch Planos");
+    let plan_list = find_all_planos(&pool).await.map_err(|e| 
+        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,e.to_string())
+    ).expect("Erro ao recuperar planos");
 
-    let template = ClienteEditTemplate {
-        &client,
-        mikrotik_options: mikrotik_list,
-        plan_options: plan_list,
+    let mut context = Context::new();
+    context.insert("client", &cliente);
+    context.insert("mikrotik_options",&mikrotik_list);
+    context.insert("plan_options",&plan_list);
+
+    let template = TEMPLATES.lock().await;
+    match template.render("cliente/cliente_edit.html", &context) {
+        Ok(template) => Html(template).into_response(),
+
+        Err(e) => {
+            let error = format!("Erro para renderizar listagem de clientes: {:?}", e);
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR,error).into_response()
+        }
     }
-    .render()
-    .map_err(|e| -> _ {
-        error!("Failed to render client edit template: {:?}", e);
-        Html("<p>Failed to render client edit template</p>".to_string())
-    })
-    .expect("Failed to render client edit template");
-
-    Html(template)
 }
-*/
 
 //Gets the id of the cliente from the delete button
 //Deletes the cliente from the db
@@ -159,7 +145,8 @@ pub async fn show_cliente_form(
     context.insert("mikrotik_options", &mikrotik_list);
     context.insert("plan_options", &plan_list);
 
-    match TEMPLATES.render("cliente/cliente_add.html", &context) {
+    let template = TEMPLATES.lock().await;
+    match template.render("cliente/cliente_add.html", &context) {
         Ok(template) => Html(template).into_response(),
 
         //TODO deal with error

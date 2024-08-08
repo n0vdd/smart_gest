@@ -1,7 +1,9 @@
 use axum::{extract::Path, response::{Html, IntoResponse, Redirect}, Extension};
 use axum_extra::extract::Form;
+use reqwest::header::TE;
 use tera::Context;
 use tracing::{debug, error};
+use tracing_subscriber::fmt::writer::Tee;
 use std::{net::Ipv4Addr,  str::FromStr, sync::Arc};
 use sqlx::PgPool;
 
@@ -10,14 +12,16 @@ use crate::{clientes::{cliente::find_cliente_in_mikrotik, plano::find_all_planos
 use super::{mikrotik::{delete_mikrotik_db, find_all_mikrotiks, find_mikrotik_by_id, save_mikrotik, update_mikrotik_db}, mikrotik_model::MikrotikDto};
 
 pub async fn add_mikrotik_form() -> impl IntoResponse {
-    match TEMPLATES.render("mikrotik/mikrotik_add.html", &tera::Context::new()) {
+    let template = TEMPLATES.lock().await;
+    match template.render("mikrotik/mikrotik_add.html", &tera::Context::new()) {
         Ok(template) => Html(template),
         Err(e) => {
             error!("Failed to render mikrotik_add template: {:?}", e);
             let error = format!("Erro ao renderizar formulario de adicao de mikrotik {e}");
             let mut context = tera::Context::new();
             context.insert("error", &error);
-            match TEMPLATES.render("base.html", &context) {
+            let template = TEMPLATES.lock().await;
+            match template.render("base.html", &context) {
                 Ok(template) => Html(template),
                 Err(e) => {
                     error!("Failed to render base html: {:?}", e);
@@ -158,10 +162,10 @@ pub async fn show_mikrotik_list(
     let mut context = tera::Context::new(); 
     context.insert("mikrotik_options", &mikrotik_list);
 
-    match TEMPLATES.render("mikrotik/mikrotik_list.html", &context) {
+    let template = TEMPLATES.lock().await;
+    match template.render("mikrotik/mikrotik_list.html", &context) {
         Ok(template) => Html(template).into_response(),
 
-        //TODO deal with error
         Err(e) => {
             error!("Failed to render mikrotik_list template: {:?}", e);
             return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,"Erro ao renderizar lista de mikrotiks").into_response();
@@ -182,10 +186,10 @@ pub async fn show_mikrotik_edit_form(
     let mut context = Context::new();
     context.insert("mikrotik", &mikrotik);
 
-    match TEMPLATES.render("mikrotik/mikrotik_edit.html",&context) {
+    let template = TEMPLATES.lock().await;
+    match template.render("mikrotik/mikrotik_edit.html",&context) {
         Ok(template) => Html(template).into_response(),
 
-        //TODO deal with error
         Err(e) => {
             error!("Failed to render mikrotik_edit template: {:?}", e);
             let error = format!("Erro ao renderizar formulario de edicao de mikrotik {e}");
@@ -197,8 +201,6 @@ pub async fn show_mikrotik_edit_form(
 //Gets the form with the edited mikrotik data
 //saves the changes to the DB
 //Return an html with the error
-//TODO make better error messages on the frontend(modals and shit)
-//Or returns a redirect of the user to the list of mikrotiks, when it all goes well
 pub async fn update_mikrotik(
     Extension(pool): Extension<Arc<PgPool>>,
     Form(mikrotik): Form<Mikrotik>,

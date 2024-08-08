@@ -8,10 +8,9 @@
     <table class="min-w-full bg-white">
         <thead>
             <tr>
-                <th class="py-2">Name</th>
+                <th class="py-2">Login</th>
                 <th class="py-2">Email</th>
                 <th class="py-2">CPF/CNPJ</th>
-                <th class="py-2">Telefone</th>
                 <th class="py-2">Actions</th>
             </tr>
         </thead>
@@ -19,11 +18,9 @@
         <tbody>
             {% for client in clients %}
             <tr>
-                <td class="border px-4 py-2">{{ client.id }}</td>
-                <td class="border px-4 py-2">{{ client.nome }}</td>
+                <td class="border px-4 py-2">{{ client.login }}</td>
                 <td class="border px-4 py-2">{{ client.email }}</td>
                 <td class="border px-4 py-2">{{ client.formatted_cpf_cnpj }}</td>
-                <td class="border px-4 py-2">{{ client.telefone }}</td>
                 <td class="border px-4 py-2">
                     <a href="/cliente/{{ client.id }}" hx-get="/cliente/{{ client.id }}" hx-target="#response" hx-swap="innerHTML" class="text-blue-500 hover:text-blue-700">Edit</a>
                     <a href="/cliente/{{ client.id }}" hx-delete="/cliente/{{ client.id }}" hx-target="#response" hx-swap="innerHTML" class="text-red-500 hover:text-red-700">Delete</a>

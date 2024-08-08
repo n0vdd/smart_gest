@@ -45,6 +45,13 @@ pub struct ContratoTemplateDto {
     pub data: String
 }
 
+#[derive(Debug,FromRow,Serialize,Deserialize)]
+pub struct ContratoTemplateEditDto {
+    pub id: i32,
+    pub nome: String,
+    pub data: String
+}
+
 #[derive(Serialize,Deserialize,Debug,FromRow)]
 pub struct ContratoTemplate {
     pub id: i32,

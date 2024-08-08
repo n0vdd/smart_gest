@@ -13,14 +13,14 @@ use axum::response::IntoResponse;
 use axum::routing::{delete, put};
 use axum::{Router, routing::get, routing::post, extract::Extension};
 use chrono::{Datelike, Duration, Utc};
-use clientes::cliente::bloqueia_clientes_atrasados;
-use clientes::cliente_handler::{bloqueia_cliente_no_radius, delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
+use clientes::cliente::{bloqueia_clientes_atrasados, import_mikauth_clientes};
+use clientes::cliente_handler::{bloqueia_cliente_no_radius, delete_cliente, register_cliente, show_cliente_edit_form, show_cliente_form, show_cliente_list, update_cliente};
 use clientes::plano_handler::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use config::config_handler::{save_email_config, save_nf_config, save_provedor, show_email_config, show_nf_config, show_provedor_config, update_email_config, update_nf_config, update_provedor};
 use config::utils_handler::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
 use cron::Schedule;
 use db::create_postgres_pool;
-use financeiro::contrato_handler::{add_contrato_template, generate_contrato, show_contrato_template_add_form, show_contrato_template_edit_form, show_contrato_template_list};
+use financeiro::contrato_handler::{add_contrato_template, generate_contrato, show_contrato_template_add_form, show_contrato_template_edit_form, show_contrato_template_list, update_contrato_template};
 use financeiro::dici_handler::{generate_dici, generate_dici_month_year, show_dici_list};
 use financeiro::email_service::setup_email;
 use financeiro::nfs_handler::show_export_lotes_list;
@@ -35,6 +35,7 @@ use sqlx::PgPool;
 use tera::Tera;
 use tokio::net::TcpListener;
 use tokio::process::Command;
+use tokio::sync::Mutex;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::{debug, error, info};
@@ -56,18 +57,15 @@ static ALLOWED_IPS: Lazy<Vec<IpAddr>> = Lazy::new(|| {
 });
 
 lazy_static! {
-    pub static ref TEMPLATES: Tera = {
-    let tera = match Tera::new("templates/**/*") {
-        Ok(t) => t,
-        Err(e) => {
-            error!("template parsing error(s): {}", e);
-            ::std::process::exit(1);
-        }
-    };
-    //there is autoescape for html by default
-    //tera.autoescape_on(vec![".html", ".sql"]);
-    //tera.register_filter("do_nothing", do_nothing_filter);
-    tera
+    pub static ref TEMPLATES: Mutex<Tera> = {
+        let mut tera = match Tera::new("templates/**/*") {
+            Ok(t) => t,
+            Err(e) => {
+                error!("template parsing error(s): {}", e);
+                ::std::process::exit(1);
+            }
+        };
+        Mutex::new(tera)
     };
 }
 
@@ -195,11 +193,12 @@ async fn main() {
     dotenv::dotenv().ok();
     tracing_subscriber::fmt::init();
 
+    /* 
     Command::new("chromedriver").spawn().map_err(|e| {
         error!("Failed to start chromedriver: {:?}", e);
         panic!("Failed to start chromedriver")
     }).expect("Failed to start chromedriver");
-
+*/
     //Setup db
     let pg_pool = Arc::new(create_postgres_pool().await
     .map_err(|e| -> _ {
@@ -210,7 +209,6 @@ async fn main() {
     info!("postgres pool:{:?} criado",pg_pool);
 
     let mailer = setup_email(&pg_pool).await.ok();
-    //TODO start emailer if there is a email config complete already
 
     let state = AppState { mailer, http_client: reqwest::Client::new() };
 
@@ -223,6 +221,12 @@ async fn main() {
     info!("mysql pool:{:?} criado",mysql_pool);
     */
 
+    /* 
+    import_mikauth_clientes(&pg_pool).await.map_err(|e| {
+        error!("Failed to import clientes from mikauth: {:?}", e);
+        panic!("Failed to import clientes from mikauth")
+    }).expect("Failed to import clientes from mikauth");
+    */
     create_radius_cliente_pool().await.map_err(|e| {
         error!("Failed to create radius cliente pool: {:?}", e);
         panic!("Failed to create radius cliente pool")
@@ -240,7 +244,8 @@ async fn main() {
     let clientes_routes = Router::new()
         .route("/",get(show_cliente_list))
         .route("/add", get(show_cliente_form))
-        .route("/add", post(register_cliente))
+        .route("/", post(register_cliente))
+        .route("/:id", get(show_cliente_edit_form))
         .route("/:id", put(update_cliente))
         .route("/:id", delete(delete_cliente))
         .route("/contrato/:cliente_id", get(generate_contrato))
@@ -279,6 +284,7 @@ async fn main() {
         .route("/contrato_template", post(add_contrato_template))
         .route("/contrato_template/add", get(show_contrato_template_add_form))
         .route("/contrato_template/:id", get(show_contrato_template_edit_form))
+        .route("/contrato_template/:id", put(update_contrato_template))
         .route("/nfs", get(show_export_lotes_list))
         .route("/dici", get(show_dici_list));
 

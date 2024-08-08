@@ -47,7 +47,8 @@ pub async fn show_dici_list(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
   context.insert("dicis", &dicis);
   context.insert("reference_date", &past_reference_date);
 
-  match TEMPLATES.render("financeiro/dici_list.html", &context) {
+  let template = TEMPLATES.lock().await;
+  match template.render("financeiro/dici_list.html", &context) {
     Ok(template) => Html(template).into_response(),
 
     Err(e) => {

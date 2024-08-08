@@ -36,7 +36,8 @@ pub async fn list_planos(Extension(pool): Extension<Arc<PgPool>>) -> impl IntoRe
     let mut context = tera::Context::new();
     context.insert("planos", &planos);
 
-    match TEMPLATES.render("plano/plano_list.html", &context) {
+    let template = TEMPLATES.lock().await;
+    match template.render("plano/plano_list.html", &context) {
         Ok(template) => Html(template).into_response(),
 
         Err(e) => {
@@ -87,7 +88,8 @@ pub async fn show_plano_edit_form(
     context.insert("plano", &plano);
     context.insert("contratos", &contratos);
 
-    match TEMPLATES.render("plano/plano_edit.html", &context) {
+    let template = TEMPLATES.lock().await;
+    match template.render("plano/plano_edit.html", &context) {
         Ok(template) => Html(template).into_response(),
 
         Err(e) => {
@@ -113,7 +115,8 @@ pub async fn show_planos_form(Extension(pool): Extension<Arc<PgPool>>) -> impl I
     let pagamentos = vec![TipoPagamento::Boleto,TipoPagamento::CartaoCredito,TipoPagamento::Pix]; 
     context.insert("tipo_pagamento", &pagamentos);
 
-    match TEMPLATES.render("plano/plano_add.html", &context) {
+    let template = TEMPLATES.lock().await;
+    match template.render("plano/plano_add.html", &context) {
         Ok(template) => Html(template).into_response(),
 
         Err(e) => {

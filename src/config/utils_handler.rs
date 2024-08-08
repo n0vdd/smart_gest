@@ -3,6 +3,7 @@ use axum::{extract::{Query, State}, response::{Html, IntoResponse}};
 use cnpj::Cnpj;
 use cpf::Cpf;
 use phonenumber::country::Id::BR;
+use reqwest::header::TE;
 use serde::Deserialize;
 use tera::Context;
 use thiserror::Error;
@@ -64,7 +65,8 @@ pub async fn lookup_cep(
         let mut context = tera::Context::new();
         context.insert("endereco", &endereco);
 
-        match TEMPLATES.render("snippets/endereco_snippet.html", &context) {
+        let template = TEMPLATES.lock().await;
+        match template.render("snippets/endereco_snippet.html", &context) {
             Ok(template) => Html(template).into_response(),
 
             Err(e) => {
@@ -80,7 +82,8 @@ pub async fn lookup_cep(
 
 //Mosta o snippet do endereco sem os dados
 pub async fn show_endereco() -> impl IntoResponse {
-    match TEMPLATES.render("snippets/endereco_snippet.html",&Context::new()) {
+    let template = TEMPLATES.lock().await;
+    match template.render("snippets/endereco_snippet.html",&Context::new()) {
         Ok(template) => Html(template).into_response(),
 
         Err(e) => {
@@ -127,7 +130,8 @@ pub async fn validate_cpf_cnpj(
                     let formatted = cpf.to_string();
                     context.insert("formatted_cpf_cnpj", &formatted);
             
-                    match TEMPLATES.render("snippets/cpf_cnpj_snippet.html", &context) {
+                    let template = TEMPLATES.lock().await;
+                    match template.render("snippets/cpf_cnpj_snippet.html", &context) {
                         Ok(template) => Html(template).into_response(),
                         Err(e) => {
                             error!("Failed to render CPF/CNPJ snippet: {:?}", e);
@@ -147,7 +151,8 @@ pub async fn validate_cpf_cnpj(
                     let formatted = cnpj.to_string();
                     context.insert("formatted_cpf_cnpj", &formatted);
             
-                    match TEMPLATES.render("snippets/cpf_cnpj_snippet.html", &context) {
+                    let template = TEMPLATES.lock().await;
+                    match template.render("snippets/cpf_cnpj_snippet.html", &context) {
                         Ok(template) => Html(template).into_response(),
                         Err(e) => {
                             error!("Failed to render CPF/CNPJ snippet: {:?}", e);

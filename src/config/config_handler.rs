@@ -14,11 +14,12 @@ pub async fn show_provedor_config(Extension(pool):Extension<Arc<PgPool>>) -> imp
         return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,e.to_string())
     ).expect("Erro ao buscar provedor");
 
+    let template = TEMPLATES.lock().await;
     if let Some(provedor) = provedor {
         let mut context = tera::Context::new();
         context.insert("provedor", &provedor);
     
-        match TEMPLATES.render("config/provedor_config_edit.html", &context) {
+        match template.render("config/provedor_config_edit.html", &context) {
             Ok(template) => Html(template).into_response(),
 
             Err(e) => {
@@ -28,7 +29,7 @@ pub async fn show_provedor_config(Extension(pool):Extension<Arc<PgPool>>) -> imp
             }
         }
     } else {
-        match TEMPLATES.render("config/provedor_config_add.html", &tera::Context::new()) {
+        match template.render("config/provedor_config_add.html", &tera::Context::new()) {
             Ok(template) => Html(template).into_response(),
 
             Err(e) => {
@@ -74,12 +75,13 @@ pub async fn show_nf_config(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
         return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,e.to_string())
     ).expect("Erro ao buscar config de nota fiscal"); 
 
+    let template = TEMPLATES.lock().await;
     if let Some(nf) = nf_config {
         let mut context = tera::Context::new();
         context.insert("id", &nf.id);
         context.insert("contabilidade_email", &nf.contabilidade_email);
     
-        match TEMPLATES.render("config/nf_config_edit.html", &context) {
+        match template.render("config/nf_config_edit.html", &context) {
             Ok(template) => Html(template).into_response(),
 
             Err(e) => {
@@ -89,7 +91,7 @@ pub async fn show_nf_config(Extension(pool):Extension<Arc<PgPool>>) -> impl Into
             }
         }
     } else {
-        match TEMPLATES.render("config/nf_config_add.html", &tera::Context::new()) {
+        match template.render("config/nf_config_add.html", &tera::Context::new()) {
             Ok(template) => Html(template).into_response(),
 
             Err(e) => {
@@ -131,11 +133,12 @@ pub async fn show_email_config(Extension(pool):Extension<Arc<PgPool>>) -> impl I
         return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,e.to_string())
     ).expect("Erro ao buscar config de email"); 
 
+    let template = TEMPLATES.lock().await;
     if let Some(email_config) = email_config {
         let mut context = tera::Context::new();
         context.insert("email_config", &email_config);
     
-        match TEMPLATES.render("config/email_config_edit.html", &context) {
+        match template.render("config/email_config_edit.html", &context) {
             Ok(template) => Html(template).into_response(),
 
             Err(e) => {
@@ -145,7 +148,7 @@ pub async fn show_email_config(Extension(pool):Extension<Arc<PgPool>>) -> impl I
             }
         }
     } else {
-        match TEMPLATES.render("config/email_config_add.html", &tera::Context::new()) {
+        match template.render("config/email_config_add.html", &tera::Context::new()) {
             Ok(template) => Html(template).into_response(),
 
             Err(e) => {

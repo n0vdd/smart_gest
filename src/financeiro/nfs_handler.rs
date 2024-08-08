@@ -19,7 +19,8 @@ pub async fn show_export_lotes_list(Extension(pool):Extension<Arc<PgPool>>) -> i
 
     context.insert("lotes", &lotes);
 
-    match TEMPLATES.render("financeiro/nota_fiscal_export.html", &context) {
+    let template = TEMPLATES.lock().await;
+    match template.render("financeiro/nota_fiscal_export.html", &context) {
         Ok(template) => Html(template),
 
         Err(e) => {

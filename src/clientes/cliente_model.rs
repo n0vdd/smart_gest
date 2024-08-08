@@ -121,3 +121,27 @@ pub struct SimpleCliente {
     pub id: i32,
     pub login: String
 }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ClientDataJson {
+    pub uuid: String,
+    pub id: String,
+    pub nome: String,
+    pub email: Option<String>,
+    pub celular: Option<String>,
+    pub login: String,
+    pub senha: String,
+    pub endereco: Option<String>,
+    pub numero: Option<String>,
+    pub bairro: Option<String>,
+    pub complemento: Option<String>,
+    pub cidade: Option<String>,
+    pub cep: Option<String>,
+    pub estado: Option<String>,
+    pub cpf_cnpj: String,
+}
+
+/// Struct for the list of clients received from the API.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ClientList {
+    pub clientes: Vec<ClientDataJson>,
+}

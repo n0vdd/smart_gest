@@ -3,7 +3,7 @@ use tracing::error;
 
 use crate::financeiro::contrato_model::ClienteContractData;
 
-use super::contrato_model::{ContratoDto, ContratoTemplate, ContratoTemplateDto};
+use super::contrato_model::{ContratoDto, ContratoTemplate, ContratoTemplateDto, ContratoTemplateEditDto};
 
 pub async fn find_all_contrato_templates(pool: &PgPool) -> Result<Vec<ContratoTemplate>, anyhow::Error> {
     match query_as!(ContratoTemplate,"SELECT * FROM contratos_templates")
@@ -95,6 +95,21 @@ pub async fn save_contrato(pool:&PgPool,contrato:&ContratoDto) -> Result<(),anyh
         Err(e) => {
             error!("Failed to insert contrato: {:?}", e);
             Err(anyhow::anyhow!("Erro ao inserir contrato"))
+        }
+    }
+}
+
+pub async fn update_contrato_template_in_db(pool:&PgPool,contrato:&ContratoTemplateEditDto,path:&str) -> Result<(),anyhow::Error> {
+    match query!(
+        "UPDATE contratos_templates SET nome = $1, path = $2 WHERE id = $3",
+        contrato.nome,
+        path,
+        contrato.id
+    ).execute(&*pool).await {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            error!("Failed to update contrato template: {:?}", e);
+            Err(anyhow::anyhow!("Erro ao atualizar contrato"))
         }
     }
 }
