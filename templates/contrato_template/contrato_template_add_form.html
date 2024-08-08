@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Adicionar Template de Contrato{% endblock title%}
+
+{% block content %}
+    <h1 class="text-2xl font-bold mb-4">Adicionar Template de Contrato</h1>
+    <form hx-post="/financeiro/contrato_template" hx-target="#base">
+        <div class="mb-4">
+            <label for="nome" class="block text-gray-700 text-sm font-bold mb-2">Nome do Contrato</label>
+            <input type="text" id="nome" name="nome" required
+                class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        </div>
+        <div class="mb-4">
+            <label for="data" class="block text-gray-700 text-sm font-bold mb-2">Contrato</label>
+            <textarea id="data" name="data" required
+                class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"></textarea>
+        </div>
+        <div class="mb-4">
+            <label for="contrato_template_html" class="block text-gray-700 text-sm font-bold mb-2">Templates</label>
+            <div class="bg-gray-100 p-4 rounded">
+                <ul class="list-disc pl-5">
+                    <li>&#123;&#123; date &#125;&#125;</li>
+                    <li>&#123;&#123; cliente.nome &#125;&#125;</li>
+                    <li>&#123;&#123; cliente.login &#125;&#125;</li>
+                    <li>&#123;&#123; cliente.rua &#125;&#125;</li>
+                    <li>&#123;&#123; cliente.numero &#125;&#125;</li>
+                    <li>&#123;&#123; cliente.complemento &#125;&#125;</li>
+                    <li>&#123;&#123; cliente.bairro &#125;&#125;</li>
+                    <li>&#123;&#123; cliente.cidade &#125;&#125;</li>
+                    <li>&#123;&#123; cliente.estado &#125;&#125;</li>
+                    <li>&#123;&#123; cliente.cep &#125;&#125;</li>
+                    <li>&#123;&#123; cliente.formatted_cpf_cnpj &#125;&#125;</li>
+                </ul>
+            </div>
+        </div>
+        <div class="flex items-center justify-between">
+            <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">Adicionar</button>
+        </div>
+    </form>
+{% endblock content %}

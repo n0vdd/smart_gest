@@ -1,0 +1,52 @@
+<div id="errorModal" class="fixed inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 hidden">
+    <div class="bg-white rounded-lg shadow-lg p-6 w-1/3">
+        <div class="flex justify-between items-center">
+            <h2 class="text-xl font-bold text-red-600">Error</h2>
+            <button id="closeModalButton" class="text-gray-600 hover:text-gray-900">&times;</button>
+        </div>
+        <div class="mt-4">
+            <!-- Error message will be rendered here -->
+            <p id="errorMessage" class="text-gray-700"></p>
+        </div>
+        <div class="mt-6 flex justify-end">
+            <button id="closeModalButton2" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Get elements
+        const errorModal = document.getElementById('errorModal');
+        const errorMessage = document.getElementById('errorMessage');
+        const closeModalButtons = document.querySelectorAll('#closeModalButton, #closeModalButton2');
+
+        // Show modal function
+        function showModal(message) {
+            errorMessage.innerText = message;
+            errorModal.classList.remove('hidden');
+        }
+
+        // Close modal function
+        function closeModal() {
+            errorModal.classList.add('hidden');
+        }
+
+        // Event listeners for closing the modal
+        closeModalButtons.forEach(button => button.addEventListener('click', closeModal));
+
+        // Listen for HTMX response errors
+        document.body.addEventListener('htmx:responseError', (event) => {
+            const xhr = event.detail.xhr;
+            showModal(xhr.responseText);
+        });
+
+        // Show modal if there is an error in the context
+        const error = "{% if error %} {{ error }} {% endif %}";
+        if (error) {
+            showModal(error);
+        }
+    });
+</script>

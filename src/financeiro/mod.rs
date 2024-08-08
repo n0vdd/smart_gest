@@ -1,0 +1,13 @@
+pub mod pagamentos;
+pub mod pagamentos_model;
+pub mod contrato;
+mod contrato_model;
+pub mod contrato_handler;
+pub mod nfs_service;
+mod nfs_model;
+pub mod email_service;
+pub mod nfs_handler;
+mod dici_model;
+pub mod dici_handler;
+mod dici;
+mod nfs;

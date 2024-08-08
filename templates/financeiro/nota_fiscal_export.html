@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Exportar Notas Fiscais{% endblock %}
+
+{% block content %}
+<div class="container mx-auto p-4">
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-2xl font-bold">Exportar Notas Fiscais</h1>
+    </div>
+
+    <div class="mt-4">
+        <table class="min-w-full bg-white">
+            <thead>
+                <tr>
+                    <th class="py-2 text-left">Ano</th>
+                    <th class="py-2 text-left">Mês</th>
+                    <th class="py-2 text-left">Caminho</th>
+                    <th class="py-2 text-left">Data de Criação</th>
+                    <th class="py-2 text-left">Ações</th>
+                </tr>
+            </thead>
+            <tbody class="space-y-4">
+                {% for lote in lotes %}
+                    <tr class="bg-gray-100 p-4 rounded shadow">
+                        <td class="px-4 py-2">{{ lote.year }}</td>
+                        <td class="px-4 py-2">{{ lote.month }}</td>
+                        <td class="px-4 py-2">{{ lote.path }}</td>
+                        <td class="px-4 py-2">{{ lote.created_at | default(value='N/A') }}</td>
+                        <td class="px-4 py-2 space-x-2">
+                            <!--TODO implement download logic-->
+                            <a href="/financeiro/nfs/lotes/{{ lote.id }}" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Download</a>
+                            <a hx-delete="/financeiro/nfs/{{ lote.id }}" href="#" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Deletar</a>
+                            <a href="/financeiro/nfs/{{ lote.id }}/email" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Enviar por Email</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock content %}

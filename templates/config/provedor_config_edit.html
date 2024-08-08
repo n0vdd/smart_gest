@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Editar Configuração de Provedor{% endblock title %}
+
+{% block content %}
+<div class="container mx-auto p-4 flex flex-col items-center">
+    <h1 class="text-2xl font-bold mb-4 text-center">Editar Configuração de Provedor</h1>
+    <!-- this should use put -->
+    <form hx-put="/config/provedor" hx-swap="#base" class="space-y-4 w-full max-w-lg">
+        <input type="hidden" name="id" value="{{ provedor.id }}">
+
+        <div class="flex items-center justify-center">
+            <label for="nome" class="w-1/4 text-right mr-4">Nome</label>
+            <input type="text" class="w-3/4 p-2 border border-gray-300 rounded" id="nome" name="nome" value="{{ provedor.nome }}" placeholder="Nome">
+        </div>
+
+        <div class="flex items-center justify-center">
+            <label for="cnpj" class="w-1/4 text-right mr-4">CNPJ</label>
+            <input type="text" class="w-3/4 p-2 border border-gray-300 rounded" id="cnpj" name="cnpj" value="{{ provedor.cnpj }}" placeholder="CNPJ">
+        </div>
+
+        <div class="flex items-center justify-center">
+            <label for="cep" class="w-1/4 text-right mr-4">CEP</label>
+            <input type="text" class="w-3/4 p-2 border border-gray-300 rounded" id="cep" name="cep" value="{{ provedor.cep }}" placeholder="CEP">
+        </div>
+
+        <div class="flex items-center justify-center">
+            <label for="rua" class="w-1/4 text-right mr-4">Rua</label>
+            <input type="text" class="w-3/4 p-2 border border-gray-300 rounded" id="rua" name="rua" value="{{ provedor.rua }}" placeholder="Rua">
+        </div>
+
+        <div class="flex items-center justify-center">
+            <label for="numero" class="w-1/4 text-right mr-4">Número</label>
+            <input type="text" class="w-3/4 p-2 border border-gray-300 rounded" id="numero" name="numero" value="{% if provedor.numero %}{{ provedor.numero }}{% endif %}" placeholder="Número">
+        </div>
+
+        <div class="flex items-center justify-center">
+            <label for="bairro" class="w-1/4 text-right mr-4">Bairro</label>
+            <input type="text" class="w-3/4 p-2 border border-gray-300 rounded" id="bairro" name="bairro" value="{{ provedor.bairro }}" placeholder="Bairro">
+        </div>
+
+        <div class="flex items-center justify-center">
+            <label for="cidade" class="w-1/4 text-right mr-4">Cidade</label>
+            <input type="text" class="w-3/4 p-2 border border-gray-300 rounded" id="cidade" name="cidade" value="{{ provedor.cidade }}" placeholder="Cidade">
+        </div>
+
+        <div class="flex items-center justify-center">
+            <label for="estado" class="w-1/4 text-right mr-4">Estado</label>
+            <input type="text" class="w-3/4 p-2 border border-gray-300 rounded" id="estado" name="estado" value="{{ provedor.estado }}" placeholder="Estado">
+        </div>
+
+        <div class="flex items-center justify-center">
+            <label for="complemento" class="w-1/4 text-right mr-4">Complemento</label>
+            <input type="text" class="w-3/4 p-2 border border-gray-300 rounded" id="complemento" name="complemento" value="{% if provedor.complemento %}{{ provedor.complemento }}{% endif %}" placeholder="Complemento">
+        </div>
+
+        <div class="flex items-center justify-center">
+            <label for="telefone" class="w-1/4 text-right mr-4">Telefone</label>
+            <input type="text" class="w-3/4 p-2 border border-gray-300 rounded" id="telefone" name="telefone" value="{{ provedor.telefone }}" placeholder="Telefone">
+        </div>
+
+        <div class="flex items-center justify-center">
+            <label for="email" class="w-1/4 text-right mr-4">Email</label>
+            <input type="email" class="w-3/4 p-2 border border-gray-300 rounded" id="email" name="email" value="{{ provedor.email }}" placeholder="Email">
+        </div>
+
+        <div class="flex items-center justify-center">
+            <label for="observacao" class="w-1/4 text-right mr-4">Observação</label>
+            <textarea class="w-3/4 p-2 border border-gray-300 rounded" id="observacao" name="observacao" placeholder="Observação">{% if provedor.observacao %}{{ provedor.observacao }}{% endif %}</textarea>
+        </div>
+
+        <div class="flex items-center justify-center">
+            <button type="button" id="add-endereco-btn" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                hx-get="/util/endereco"
+                hx-target="#side-window"
+                hx-swap="innerHTML"
+            >Add Endereço</button>
+        </div>
+
+        <div class="flex justify-center">
+            <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Salvar</button>
+        </div>
+        <!-- Hidden fields for address data -->
+        <input type="hidden" id="main-cep" name="cep">
+        <input type="hidden" id="main-rua" name="rua">
+        <input type="hidden" id="main-numero" name="numero">
+        <input type="hidden" id="main-bairro" name="bairro">
+        <input type="hidden" id="main-complemento" name="complemento">
+        <input type="hidden" id="main-cidade" name="cidade">
+        <input type="hidden" id="main-estado" name="estado">
+        <input type="hidden" id="main-ibge" name="ibge">
+    </form>
+</div>
+
+
+
+<!-- Side Window -->
+<div id="side-window" class="fixed right-0 top-0 h-full w-1/3 bg-white shadow-lg p-6 transform translate-x-full transition-transform duration-300 ease-in-out"></div>
+
+<script>
+    document.getElementById('add-endereco-btn').addEventListener('click', function() {
+        document.getElementById('side-window').style.transform = 'translateX(0)';
+    });
+
+    function closeEnderecoPane() {
+        document.getElementById('main-cep').value = document.getElementById('cep').value;
+        document.getElementById('main-rua').value = document.getElementById('rua').value;
+        document.getElementById('main-numero').value = document.getElementById('numero').value;
+        document.getElementById('main-bairro').value = document.getElementById('bairro').value;
+        document.getElementById('main-complemento').value = document.getElementById('complemento').value;
+        document.getElementById('main-cidade').value = document.getElementById('cidade').value;
+        document.getElementById('main-estado').value = document.getElementById('estado').value;
+        document.getElementById('main-ibge').value = document.getElementById('ibge').value;
+
+        document.getElementById('side-window').style.transform = 'translateX(100%)';
+    }
+</script>
+{% endblock content %}

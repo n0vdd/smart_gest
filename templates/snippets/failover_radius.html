@@ -1,0 +1,54 @@
+<!-- Modal -->
+<div id="radiusModal" class="fixed inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 hidden">
+    <div class="bg-white rounded-lg shadow-lg p-6 w-2/3">
+        <div class="flex justify-between items-center">
+            <h2 class="text-xl font-bold text-gray-800">Failover Radius Script</h2>
+            <button id="closeModalButton" class="text-gray-600 hover:text-gray-900">&times;</button>
+        </div>
+        <div id="modalContent" class="mt-4">
+            <!-- Content will be rendered here -->
+        </div>
+        <div class="mt-6 flex justify-end">
+            <button id="closeModalButton2" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Get elements
+    const radiusModal = document.getElementById('radiusModal');
+    const modalContent = document.getElementById('modalContent');
+    const closeModalButtons = document.querySelectorAll('#closeModalButton, #closeModalButton2');
+
+    // Show modal function
+    function showModal(content) {
+        modalContent.innerHTML = content;
+        radiusModal.classList.remove('hidden');
+    }
+
+    // Close modal function
+    function closeModal() {
+        radiusModal.classList.add('hidden');
+        modalContent.innerHTML = ''; // Clear content when closing
+    }
+
+    // Event listeners for closing the modal
+    closeModalButtons.forEach(button => button.addEventListener('click', closeModal));
+
+    // Listen for HTMX request success to show the modal with content
+    document.body.addEventListener('htmx:afterOnLoad', (event) => {
+        if (event.detail.elt.getAttribute('hx-on') === 'htmx:afterOnLoad:showModal') {
+            showModal(event.detail.xhr.responseText);
+        }
+    });
+
+    // Listen for clicks on the failover button
+    document.body.addEventListener('click', (event) => {
+        if (event.target.matches('[data-trigger="showModal"]')) {
+            event.preventDefault();
+            showModal(event.target.getAttribute('data-content'));
+        }
+    });
+</script>

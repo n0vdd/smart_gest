@@ -1,7 +1,9 @@
 mod db;
-mod handlers;
-mod services;
-mod models;
+mod provedor;
+mod clientes;
+mod financeiro;
+mod integracoes;
+mod config;
 
 use anyhow::{anyhow, Context};
 use axum::extract::Request;
@@ -11,24 +13,24 @@ use axum::response::IntoResponse;
 use axum::routing::{delete, put};
 use axum::{Router, routing::get, routing::post, extract::Extension};
 use chrono::{Datelike, Duration, Utc};
+use clientes::cliente::bloqueia_clientes_atrasados;
+use clientes::cliente_handler::{bloqueia_cliente_no_radius, delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
+use clientes::plano_handler::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
+use config::config_handler::{save_email_config, save_nf_config, save_provedor, show_email_config, show_nf_config, show_provedor_config, update_email_config, update_nf_config, update_provedor};
+use config::utils_handler::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
 use cron::Schedule;
 use db::create_postgres_pool;
-use handlers::clients::{bloqueia_cliente_no_radius, bloqueia_clientes_atrasados, delete_cliente, register_cliente, show_cliente_form, show_cliente_list, update_cliente};
-use handlers::config::{save_email_config, save_nf_config, save_provedor, show_email_config, show_nf_config, show_provedor_config, update_email_config, update_nf_config, update_provedor};
-use handlers::contrato::{add_contrato_template, generate_contrato, show_contrato_template_add_form, show_contrato_template_edit_form, show_contrato_template_list};
-use handlers::dici::{generate_dici, generate_dici_month_year, show_dici_list};
-use handlers::mikrotik::{delete_mikrotik, failover_mikrotik_script, failover_radius_script, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_form, show_mikrotik_list, update_mikrotik};
-use handlers::nfs::show_export_lotes_list;
-use handlers::planos::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
-use handlers::utils::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
+use financeiro::contrato_handler::{add_contrato_template, generate_contrato, show_contrato_template_add_form, show_contrato_template_edit_form, show_contrato_template_list};
+use financeiro::dici_handler::{generate_dici, generate_dici_month_year, show_dici_list};
+use financeiro::email_service::setup_email;
+use financeiro::nfs_handler::show_export_lotes_list;
+use financeiro::nfs_service::exporta_nfs;
+use integracoes::genieacs_voip_service::checa_voip_down;
+use integracoes::webhooks_service::webhook_handler;
 use lettre::{AsyncSmtpTransport, Tokio1Executor};
-use models::client::ClienteNf;
 use once_cell::sync::Lazy;
+use provedor::mikrotik_handler::{add_mikrotik_form, delete_mikrotik, failover_mikrotik_script, failover_radius_script, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_list, update_mikrotik};
 use radius::{create_radius_cliente_pool, create_radius_plano_bloqueado};
-use services::email::setup_email;
-use services::nfs::{download_nf_nao_enviada, exporta_nfs, gera_nfs};
-use services::voip::checa_voip_down;
-use services::webhooks::webhook_handler;
 use sqlx::PgPool;
 use tera::Tera;
 use tokio::net::TcpListener;
@@ -246,7 +248,7 @@ async fn main() {
 
     let mikrotik_routes = Router::new()
         .route("/", get(show_mikrotik_list))
-        .route("/add", get(show_mikrotik_form))
+        .route("/add", get(add_mikrotik_form))
         .route("/add", post(register_mikrotik))
         .route("/:id", put(update_mikrotik))
         .route("/:id", delete(delete_mikrotik))
