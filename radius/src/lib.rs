@@ -375,9 +375,17 @@ pub async fn create_radius_plano(plano: PlanoRadiusDto) -> Result<(), anyhow::Er
         .execute(&mut pool)
         .await
         .context("Failed to insert plano into radgroupreply Mikrotik-Rate-Limit")?;
+    //TODO give the mikrotik ip as the primary dns and google as the secondary
+    //INSERT INTO `radreply` (`id`, `username`, `attribute`, `op`, `value`) VALUES
+//(NULL, 'jose@provedor.com', 'MS-Primary-DNS-Server', ':=', '1.1.1.1'),
+//(NULL, 'jose@provedor.com', 'MS-Secondary-DNS-Server', ':=', '9.9.9.9');
 
     Ok(())
 }
+
+//TODO checa contra gato net
+//verificar se o exist dois usuários iguais na radippool vindo de diferentes nasipaddress
+//executar uma ação, ex envia um alerta de gatonet
 
 pub async fn delete_radius_plano(plano_nome: &str) -> Result<(),anyhow::Error> {
     let mut pool = PgConnection::connect(DATABASE_URL)
