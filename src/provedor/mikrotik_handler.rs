@@ -66,6 +66,7 @@ pub async fn failover_mikrotik_script(Path(id):Path<i32>) -> impl IntoResponse {
 ///and so that everyone know that it was created by this system
 ///param: mikrotik id to get the associated clientes
 ///param: Db connection for the logic(getting all the planos,linking clientes to mikrotik)
+/// TODO add delay of 0.2s between each command
 pub async fn failover_radius_script(Path(mikrotik_id):Path<i32>,Extension(pool):Extension<Arc<PgPool>>) -> impl IntoResponse {
     //Get all the planos
     let planos = find_all_planos(&pool).await.map_err(|e|{
@@ -103,6 +104,7 @@ pub async fn failover_radius_script(Path(mikrotik_id):Path<i32>,Extension(pool):
         // \$	Output $ character. Otherwise $ is used to link variable.
         // \?	Output ? character. Otherwise ? is used to print "help" in console.
         // \_	- space
+        // when there is a \ before \$ and a ! after you need to escape the \ with another \ so it becomes \\\$!
         //TODO escape mikrotik problem chars for login and senha
         //We use \\ because the first escapes the second as a rust string
         let login = cliente.login.replace("$","\\$").replace("?","\\?").replace(" ","\\_");
