@@ -457,6 +457,7 @@ async fn input_cliente(client: &Client,cpf_cnpj: &str) -> Result<(),anyhow::Erro
     Ok(())
 }
 
+//TODO alterar de 1s entre cada passo para 0.5s
 async fn dados_nfs(cliente: &ClienteNf, client: &Client, value: f32) -> Result<(), anyhow::Error> {
     sleep(Duration::from_secs(1)).await;
     // Locate and set "Razão Social" if empty

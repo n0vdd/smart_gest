@@ -44,16 +44,16 @@ pub async fn failover_mikrotik_script(Path(id):Path<i32>) -> impl IntoResponse {
 
     //This should keep it all formmated
     //TODO this should use https for secure connection
-    script.push_str(format!(r#"/system scheduler add interval=45m name=ler_pppoe on-event=":execute script=ler_pppoe;
-global done "";
-/system script add name=ler_pppoe source=" #===============================\r
-/tool fetch url="http://{}:8080/mikrotik/{}/faiolver" dst-path=mkt_pppoe.rsc;
-:set done "true";
-:if ( [/file find name=mkt_pppoe.rsc] != "" ) do={{
-:log warning "Importando PPPoE";
-/import mkt_pppoe.rsc;
-/file remove mkt_pppoe.rsc;
-}}
+    script.push_str(format!(r#"<p>/system scheduler add interval=45m name=ler_pppoe on-event=":execute script=ler_pppoe;</p>
+                                       <p>global done "";</p>
+                                       <p>/system script add name=ler_pppoe source=" #===============================\r</p>
+                                       <p>/tool fetch url="http://{}:8080/mikrotik/{}/faiolver" dst-path=mkt_pppoe.rsc;</p>
+                                       <p>:set done "true";</p>
+                                       <p>:if ( [/file find name=mkt_pppoe.rsc] != "" ) do={{ </p>
+                                       <p>:log warning "Importando PPPoE";</p>
+                                       <p>/import mkt_pppoe.rsc;</p>
+                                       <p>/file remove mkt_pppoe.rsc;</p>
+                                       }}
 "#,ip.to_string(),id).as_str());
     
     debug!("mikrotik failover script:{}",script);
@@ -80,16 +80,16 @@ pub async fn failover_radius_script(Path(mikrotik_id):Path<i32>,Extension(pool):
 
     let mut commands = String::new();
     //remove previous added profiles
-    commands.push_str(format!(r#":foreach profile in=[/ppp/profile/find where comment="smart_gest"] do={{/ppp/profile/remove $profile}}
+    commands.push_str(format!(r#":foreach profile in=[/ppp profile find where comment="smart_gest"] do={{/ppp profile remove $profile}}
     "#).as_str());
     //remove previous added clientes 
-    commands.push_str(format!(r#":foreach cliente in=[/ppp/secret/find where comment="smart_gest"] do={{/ppp/secret/remove $cliente}}
+    commands.push_str(format!(r#":foreach cliente in=[/ppp secret find where comment="smart_gest"] do={{/ppp secret remove $cliente}}
     "#).as_str());
 
     for plano in &planos {
         debug!("adicionando plano ao script: {:?}",plano);
         //add profiles
-        commands.push_str(format!(r#"/ppp/profile/add name="{}" rate-limit={}m/{}m only-one=yes comment="smart_gest"
+        commands.push_str(format!(r#"/ppp profile add name="{}" rate-limit={}m/{}m only-one=yes comment="smart_gest"
         "#,
             plano.nome,plano.velocidade_down,plano.velocidade_up).as_str());
     }
@@ -107,7 +107,7 @@ pub async fn failover_radius_script(Path(mikrotik_id):Path<i32>,Extension(pool):
         //We use \\ because the first escapes the second as a rust string
         let login = cliente.login.replace("$","\\$").replace("?","\\?").replace(" ","\\_");
         let senha = cliente.senha.replace("$","\\$").replace("?","\\?").replace(" ","\\_");
-        commands.push_str(format!(r#"/ppp/secret/add name="{}" password="{}" profile="{}" service=pppoe comment="smart_gest" disabled=yes
+        commands.push_str(format!(r#"/ppp secret add name="{}" password="{}" profile="{}" service=pppoe comment="smart_gest" disabled=yes
         "#,
         login,senha,plano_name).as_str());
         }

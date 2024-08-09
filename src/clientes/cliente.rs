@@ -5,7 +5,7 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::{Datelike, Utc};
 use cnpj::Cnpj;
 use cpf::Cpf;
-use radius::{bloqueia_cliente_radius, delete_cliente_radius};
+use radius::{add_cliente_radius, bloqueia_cliente_radius, delete_cliente_radius, ClienteNas};
 use reqwest::header::AUTHORIZATION;
 use sqlx::{query, query_as, PgPool};
 use time::{macros::format_description, Duration, Month, PrimitiveDateTime};
@@ -394,10 +394,10 @@ pub async fn import_mikauth_clientes(pool:&PgPool) -> Result<(),anyhow::Error>{
             telefone: "00000000000".to_string(),
             cpf_cnpj: cpf_cnpj,
             formatted_cpf_cnpj: cliente.cpf_cnpj,
-            login: cliente.login,
-            senha: cliente.senha,
+            login: cliente.login.clone(),
+            senha: cliente.senha.clone(),
             mikrotik_id: 1,
-            plano_id: 3,
+            plano_id: 1,
             contrato_id: None,
             endereco: endereco,
             gera_nf: false,
@@ -405,7 +405,15 @@ pub async fn import_mikauth_clientes(pool:&PgPool) -> Result<(),anyhow::Error>{
             add_to_asaas: false,
         };
 
+        let cliente_nas = ClienteNas {
+            username: cliente.login,
+            password: cliente.senha,
+            plano_nome: "teste".to_string(),
+        };
+
+        add_cliente_radius(cliente_nas).await?;
         save_cliente(&new_cliente, &pool).await?;
+
     }
     Ok(())
 }

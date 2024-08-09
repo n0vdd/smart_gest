@@ -14,7 +14,7 @@ use axum::routing::{delete, put};
 use axum::{Router, routing::get, routing::post, extract::Extension};
 use chrono::{Datelike, Duration, Utc};
 use clientes::cliente::{bloqueia_clientes_atrasados, import_mikauth_clientes};
-use clientes::cliente_handler::{bloqueia_cliente_no_radius, delete_cliente, register_cliente, show_cliente_edit_form, show_cliente_form, show_cliente_list, update_cliente};
+use clientes::cliente_handler::{bloqueia_cliente_no_radius, delete_cliente, desbloqueia_cliente_no_radius, register_cliente, show_cliente_edit_form, show_cliente_form, show_cliente_list, update_cliente};
 use clientes::plano_handler::{delete_plano, list_planos, register_plano, show_plano_edit_form, show_planos_form, update_plano};
 use config::config_handler::{save_email_config, save_nf_config, save_provedor, show_email_config, show_nf_config, show_provedor_config, update_email_config, update_nf_config, update_provedor};
 use config::utils_handler::{lookup_cep, show_endereco, validate_cpf_cnpj, validate_phone};
@@ -30,7 +30,7 @@ use integracoes::webhooks_service::webhook_handler;
 use lettre::{AsyncSmtpTransport, Tokio1Executor};
 use once_cell::sync::Lazy;
 use provedor::mikrotik_handler::{add_mikrotik_form, delete_mikrotik, failover_mikrotik_script, failover_radius_script, register_mikrotik, show_mikrotik_edit_form, show_mikrotik_list, update_mikrotik};
-use radius::{create_radius_cliente_pool, create_radius_plano_bloqueado};
+use radius::{create_radius_cliente_pool, create_radius_plano_bloqueado, desbloqueia_cliente};
 use sqlx::PgPool;
 use tera::Tera;
 use tokio::net::TcpListener;
@@ -121,6 +121,8 @@ async fn check_access_token(req: Request,next: Next) -> Result<impl IntoResponse
 }
 
 //BUG this may be running all the time
+//TODO separar em duas funcoes, uma para rodar todo dia e outra para rodar nos dias especificos do mes 
+//BUG ter os dois schedulers na mesma funcao nao parece ser uma boa ideia, dificil de testar entao talvez ja nao esteja funcionando
 //TODO should check every day 1 and 12 of the month
 //on day 1 it will call the nfs function that will send the xml of nota fiscal for the month for a email
 //will also generate dici for the previous month and send a notification to a telegram channel
@@ -226,7 +228,7 @@ async fn main() {
         error!("Failed to import clientes from mikauth: {:?}", e);
         panic!("Failed to import clientes from mikauth")
     }).expect("Failed to import clientes from mikauth");
-    */
+*/
     create_radius_cliente_pool().await.map_err(|e| {
         error!("Failed to create radius cliente pool: {:?}", e);
         panic!("Failed to create radius cliente pool")
@@ -249,6 +251,7 @@ async fn main() {
         .route("/:id", put(update_cliente))
         .route("/:id", delete(delete_cliente))
         .route("/contrato/:cliente_id", get(generate_contrato))
+        .route("/unblock/:cliente_id", get(desbloqueia_cliente_no_radius))
         .route("/block/:cliente_id", get(bloqueia_cliente_no_radius));
 
     let mikrotik_routes = Router::new()

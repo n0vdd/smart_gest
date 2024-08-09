@@ -1,5 +1,5 @@
 use axum::{extract::{Path, State}, response::{Html, IntoResponse, Redirect}, Extension};
-use radius::{bloqueia_cliente_radius, add_cliente_radius, ClienteNas};
+use radius::{add_cliente_radius, bloqueia_cliente_radius, desbloqueia_cliente, ClienteNas};
 use tera::Context;
 use tracing::error;
 use axum_extra::extract::Form;
@@ -10,14 +10,35 @@ use sqlx::PgPool;
 
 use crate::{integracoes::webhooks_service::add_cliente_to_asaas, provedor::mikrotik::find_all_mikrotiks, AppState, TEMPLATES};
 
-use super::{cliente::{delete_cliente_by_id, find_all_clientes, find_cliente_by_id, get_cliente_login_by_id, save_cliente, update_cliente_by_id}, cliente_model::{Cliente, ClienteDto, TipoPessoa}, plano::{find_all_planos, find_plano_by_id}};
+use super::{cliente::{delete_cliente_by_id, find_all_clientes, find_cliente_by_id, get_cliente_login_by_id, save_cliente, update_cliente_by_id}, cliente_model::{Cliente, ClienteDto, TipoPessoa}, plano::{find_all_planos, find_plano_by_cliente, find_plano_by_id}};
 
 
 
+//TODO demora mas acaba bloqueando sem precisar derrubar a conexao(nao q faca diferenca ne)
 pub async fn bloqueia_cliente_no_radius(Extension(pool):Extension<Arc<PgPool>>,Path(id): Path<i32>) -> impl IntoResponse {
     let login = get_cliente_login_by_id(&pool, id).await.expect("Erro ao buscar login do cliente");
 
     match bloqueia_cliente_radius(&login).await {
+        Ok(_) => Redirect::to("/cliente").into_response(),
+
+        Err(e) => {
+            error!("Failed to block cliente: {:?}", e);
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+        }
+    }
+}
+
+//TODO aparentemente preciso resetar o modem(tenho genieacs para isso pelo menos)
+pub async fn desbloqueia_cliente_no_radius(Extension(pool): Extension<Arc<PgPool>>,Path(id): Path<i32>) -> impl IntoResponse {
+    let login = get_cliente_login_by_id(&pool, id).await.map_err(|e| 
+        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,e.to_string())
+    ).expect("Erro ao buscar login do cliente");
+
+    let plano = find_plano_by_cliente(&pool, id).await.map_err(|e|
+        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,e.to_string())
+    ).expect("Erro ao buscar plano do cliente");
+
+    match desbloqueia_cliente(&login,plano.nome).await {
         Ok(_) => Redirect::to("/cliente").into_response(),
 
         Err(e) => {
